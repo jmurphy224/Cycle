@@ -314,8 +314,9 @@ const Store = (() => {
   const write=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}};
   async function call(body){
     const r=await fetch(PROXY,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-    if(!r.ok)throw new Error(body.action+"/"+body.table+" "+r.status);
-    return r.json();
+    const text=await r.text();
+    if(!r.ok)throw new Error("HTTP "+r.status+" — "+text.slice(0,240));
+    return text?JSON.parse(text):null;
   }
   const enqueue=op=>{const q=read(LS.queue,[]);q.push(op);write(LS.queue,q)};
   async function flush(){let q=read(LS.queue,[]);if(!q.length)return;const left=[];for(const op of q){try{await call(op)}catch{left.push(op)}}write(LS.queue,left);}
@@ -380,7 +381,7 @@ const SITES=["Left Abdomen","Right Abdomen","Left Thigh","Right Thigh","Left Arm
 const SIDE_FX=["Nausea","Fatigue","Constipation","Headache","Reflux","Site reaction"];
 const DEFAULT_GOALS={cal:2200,pro:165,carb:250,fat:75,fib:35};
 
-const today=()=>new Date().toISOString().slice(0,10);
+const today=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);};
 const $=id=>document.getElementById(id);
 let goals={...DEFAULT_GOALS};
 let shotDraft={dose:10,site:null,fx:[]};
@@ -565,7 +566,7 @@ async function boot(){
     $("synced").textContent="Synced "+new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
     renderToday();
   }catch(e){
-    $("status-text").innerHTML="Can't reach the database yet. The app still works offline and will sync once <b>SUPABASE_URL</b> and <b>SUPABASE_SERVICE_KEY</b> are set in Vercel.";
+    $("status-text").innerHTML="Not syncing yet. The exact error is below — this tells us the fix:<br><br><code style='color:var(--danger);font-size:12px;word-break:break-all'>"+esc(e.message||String(e))+"</code>";
     $("synced").textContent="Working offline";
   }
 }
