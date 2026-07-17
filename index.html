@@ -28,17 +28,45 @@
     font-size:15px;line-height:1.45;padding-bottom:calc(76px + var(--safe-b));
     -webkit-font-smoothing:antialiased;overscroll-behavior-y:none;
   }
-  .wrap{max-width:520px;margin:0 auto;padding:20px 18px 8px}
+  .wrap{max-width:520px;margin:0 auto;padding:calc(20px + env(safe-area-inset-top,0px)) 18px 8px}
   h1,h2,h3{font-family:var(--disp);font-weight:600;letter-spacing:-0.01em}
   .num{font-family:var(--disp);font-variant-numeric:tabular-nums;letter-spacing:-0.02em}
   .muted{color:var(--muted)} .faint{color:var(--faint)}
   button{font-family:var(--body);cursor:pointer;border:none;color:inherit;background:none}
 
   /* header */
-  header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:18px}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
   header .logo{font-family:var(--disp);font-weight:700;font-size:22px;letter-spacing:-0.03em}
   header .logo b{color:var(--accent)}
   header .date{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+  /* date navigator */
+  .datenav{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px}
+  .datenav button.arrow{width:30px;height:30px;border-radius:9px;color:var(--muted);font-size:17px;display:flex;align-items:center;justify-content:center}
+  .datenav button.arrow:disabled{opacity:.28}
+  .datenav .dpick{position:relative;min-width:118px;text-align:center}
+  .datenav .dpick .lbl{font-size:13px;color:var(--text);font-weight:500;font-variant-numeric:tabular-nums}
+  .datenav .dpick .today-tag{font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:0.06em}
+  .datenav .dpick input{position:absolute;inset:0;opacity:0;width:100%;height:100%;padding:0}
+
+  /* report overlay */
+  #report-ov{position:fixed;inset:0;background:var(--bg);z-index:60;overflow-y:auto;display:none}
+  #report-ov.on{display:block}
+  .rep-wrap{max-width:640px;margin:0 auto;padding:calc(18px + env(safe-area-inset-top,0px)) 20px 40px}
+  .rep-bar{display:flex;gap:10px;position:sticky;top:0;background:var(--bg);padding:8px 0 12px}
+  .rep-doc{background:#fff;color:#14181d;border-radius:12px;padding:26px 24px;font-family:var(--body)}
+  .rep-doc h2{font-family:var(--disp);font-size:22px;margin-bottom:2px;color:#14181d}
+  .rep-doc .sub{color:#5a6472;font-size:13px;margin-bottom:18px}
+  .rep-doc .avg{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:14px 0 22px}
+  .rep-doc .avg div{background:#f2f4f7;border-radius:9px;padding:10px 6px;text-align:center}
+  .rep-doc .avg .n{font-family:var(--disp);font-weight:700;font-size:18px}
+  .rep-doc .avg .k{font-size:10px;color:#5a6472;text-transform:uppercase;letter-spacing:0.05em}
+  .rep-day{border-top:1px solid #e4e8ee;padding:12px 0}
+  .rep-day .dh{display:flex;justify-content:space-between;font-family:var(--disp);font-weight:600;font-size:14px;margin-bottom:6px}
+  .rep-day .dh span{color:#5a6472;font-weight:500}
+  .rep-meal{font-size:13px;color:#333b45;padding:2px 0;display:flex;justify-content:space-between;gap:12px}
+  .rep-meal .mk{color:#8b96a5;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .rep-none{color:#8b96a5;font-size:13px;font-style:italic}
 
   .card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:18px;margin-bottom:14px}
   .card h3{font-size:13px;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);font-weight:600;margin-bottom:14px}
@@ -147,13 +175,26 @@
   .toast.show{opacity:1;transform:translateX(-50%) translateY(-6px)}
   .synced{font-size:11px;color:var(--faint);text-align:center;padding:4px 0 2px}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+  @media print{
+    body{padding:0}
+    .wrap,nav,.toast,.rep-bar{display:none!important}
+    #report-ov{position:static;display:block!important;background:#fff}
+    .rep-wrap{padding:0} .rep-doc{border-radius:0;padding:0}
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <div class="logo">Cy<b>cle</b></div>
-    <div class="date" id="today-label"></div>
+    <div class="datenav">
+      <button class="arrow" onclick="stepDay(-1)">‹</button>
+      <div class="dpick">
+        <div class="lbl" id="dnav-lbl">Today</div>
+        <input type="date" id="dnav-input" onchange="jumpDay(this.value)" />
+      </div>
+      <button class="arrow" id="dnav-next" onclick="stepDay(1)">›</button>
+    </div>
   </header>
 
   <!-- ===== TODAY ===== -->
@@ -283,6 +324,15 @@
       <button class="btn ghost" onclick="saveGoals()">Save goals</button>
     </div>
     <div class="card">
+      <h3>Share with dietitian</h3>
+      <div class="muted" style="font-size:13px;margin-bottom:12px">Build a clean report to print, save as PDF, or share.</div>
+      <div class="grid3">
+        <button class="btn sm ghost" onclick="buildReport(7)">7 days</button>
+        <button class="btn sm ghost" onclick="buildReport(14)">14 days</button>
+        <button class="btn sm ghost" onclick="buildReport(30)">30 days</button>
+      </div>
+    </div>
+    <div class="card">
       <h3>Status</h3>
       <div class="muted" style="font-size:13.5px" id="status-text">Checking connection…</div>
     </div>
@@ -302,6 +352,16 @@
 </nav>
 
 <div class="toast" id="toast"></div>
+
+<div id="report-ov">
+  <div class="rep-wrap">
+    <div class="rep-bar">
+      <button class="btn sm" onclick="window.print()">Save / Share PDF</button>
+      <button class="btn sm ghost" onclick="closeReport()">Close</button>
+    </div>
+    <div class="rep-doc" id="rep-doc"></div>
+  </div>
+</div>
 
 <script>
 /* =========================================================================
@@ -385,6 +445,8 @@ const today=()=>{const d=new Date();return new Date(d.getTime()-d.getTimezoneOff
 const $=id=>document.getElementById(id);
 let goals={...DEFAULT_GOALS};
 let shotDraft={dose:10,site:null,fx:[]};
+let viewDate=today();  // the day currently being viewed / logged to
+const addDays=(iso,n)=>{const d=new Date(iso+"T00:00:00");d.setDate(d.getDate()+n);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);};
 
 function toast(msg){const t=$("toast");t.textContent=msg;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),2000);}
 function fmtDate(d){return new Date(d+"T00:00:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});}
@@ -398,14 +460,35 @@ function go(tab){
   window.scrollTo(0,0);
 }
 
+/* ---- DATE NAV ---- */
+function renderDateNav(){
+  const isToday=viewDate===today();
+  $("dnav-lbl").innerHTML=isToday?`Today <span class="today-tag"></span>`:fmtDate(viewDate);
+  $("dnav-input").value=viewDate;
+  $("dnav-next").disabled=isToday;            // can't go past today
+}
+function stepDay(delta){
+  const next=addDays(viewDate,delta);
+  if(next>today())return;                      // no future
+  viewDate=next;refreshDay();
+}
+function jumpDay(v){
+  if(!v)return;
+  viewDate=v>today()?today():v;refreshDay();
+}
+function refreshDay(){
+  renderDateNav();renderToday();renderFood();
+}
+
 /* ---- TODAY ---- */
-function todayTotals(){
+function totalsFor(date){
   const t={cal:0,pro:0,carb:0,fat:0,fib:0};
-  Store.listFood(today()).forEach(f=>{t.cal+=+f.calories||0;t.pro+=+f.protein||0;t.carb+=+f.carbs||0;t.fat+=+f.fat||0;t.fib+=+f.fiber||0;});
+  Store.listFood(date).forEach(f=>{t.cal+=+f.calories||0;t.pro+=+f.protein||0;t.carb+=+f.carbs||0;t.fat+=+f.fat||0;t.fib+=+f.fiber||0;});
   return t;
 }
+function todayTotals(){return totalsFor(viewDate);}
 function renderToday(){
-  $("today-label").textContent=fmtDate(today());
+  renderDateNav();
   const t=todayTotals();
   const pct=Math.min(100,Math.round(t.cal/goals.cal*100));
   $("kcal-eaten").textContent=Math.round(t.cal);
@@ -422,7 +505,7 @@ function renderToday(){
     return `<div class="macro m-${k}"><span class="lbl">${lbl}</span><div class="track"><i style="width:${p}%"></i></div><span class="val">${Math.round(v)} / ${g}g</span></div>`;
   }).join("");
 
-  $("water-amt").textContent=Store.getDay(today()).water_oz;
+  $("water-amt").textContent=Store.getDay(viewDate).water_oz;
   renderDial();
 }
 function renderDial(){
@@ -439,7 +522,7 @@ function renderDial(){
   arc.style.stroke=days>=7?"var(--danger)":"var(--accent)";
 }
 async function addWater(oz){
-  await Store.setDay(today(),{water_oz:Store.getDay(today()).water_oz+oz});
+  await Store.setDay(viewDate,{water_oz:Store.getDay(viewDate).water_oz+oz});
   renderToday();
 }
 
@@ -450,7 +533,7 @@ document.querySelectorAll("#f-meal button").forEach(b=>b.onclick=()=>{
 function selectedMeal(){return document.querySelector("#f-meal button.on")?.dataset.m||"Snack";}
 
 function renderFood(){
-  const list=Store.listFood(today());
+  const list=Store.listFood(viewDate);
   const el=$("food-list");
   if(!list.length){el.innerHTML=`<div class="empty"><b>Nothing logged yet</b>Use Ask Cycle or add a meal below.</div>`;return;}
   el.innerHTML=list.map(f=>`
@@ -466,7 +549,7 @@ async function removeFood(id){await Store.deleteFood(id);renderFood();renderToda
 async function saveManual(){
   const desc=$("f-desc").value.trim();
   if(!desc)return toast("Add a description");
-  const e={date:today(),meal:selectedMeal(),description:desc,source:"Manual",
+  const e={date:viewDate,meal:selectedMeal(),description:desc,source:"Manual",
     calories:+$("f-cal").value||0,protein:+$("f-pro").value||0,carbs:+$("f-carb").value||0,fat:+$("f-fat").value||0,fiber:+$("f-fib").value||0};
   await Store.addFood(e);
   ["f-desc","f-cal","f-pro","f-carb","f-fat","f-fib"].forEach(i=>$(i).value="");
@@ -489,7 +572,7 @@ async function aiParse(){
     const sys=`You estimate nutrition for a GLP-1 user tracking meals. Reply with ONLY a JSON object, no prose, no markdown fences: {"description":"short name","meal":"Breakfast|Lunch|Dinner|Snack","calories":int,"protein":int,"carbs":int,"fat":int,"fiber":int}. Estimate reasonable values for a single serving as described.`;
     const raw=await callAI(sys,q);
     const j=JSON.parse(raw.replace(/```json|```/g,"").trim());
-    await Store.addFood({date:today(),meal:j.meal||"Snack",description:j.description||q,source:"AI estimate",
+    await Store.addFood({date:viewDate,meal:j.meal||"Snack",description:j.description||q,source:"AI estimate",
       calories:+j.calories||0,protein:+j.protein||0,carbs:+j.carbs||0,fat:+j.fat||0,fiber:+j.fiber||0});
     $("ai-input").value="";s.textContent="";renderFood();renderToday();toast("Logged "+(Math.round(j.calories)||0)+" kcal ✓");
   }catch(e){s.textContent=e.message||"Couldn't parse that — try the manual form.";}
@@ -544,8 +627,45 @@ function renderShotList(){
 /* ---- YOU ---- */
 async function saveWeight(){
   const w=parseFloat($("weight-in").value);if(!w)return toast("Enter a weight");
-  await Store.setDay(today(),{weight:w});$("weight-in").value="";toast("Weight saved ✓");
+  await Store.setDay(viewDate,{weight:w});$("weight-in").value="";renderToday();toast("Weight saved ✓");
 }
+
+/* ---- REPORT ---- */
+function buildReport(days){
+  const end=today();
+  const dates=[];for(let i=days-1;i>=0;i--)dates.push(addDays(end,-i));
+  // per-day rows + averages over days that actually have food logged
+  let sums={cal:0,pro:0,carb:0,fat:0,fib:0},logged=0;
+  const dayHtml=dates.map(d=>{
+    const meals=Store.listFood(d);
+    const t=totalsFor(d);
+    const day=Store.getDay(d);
+    if(meals.length){logged++;sums.cal+=t.cal;sums.pro+=t.pro;sums.carb+=t.carb;sums.fat+=t.fat;sums.fib+=t.fib;}
+    const mealRows=meals.length?meals.map(m=>`<div class="rep-meal"><span>${esc(m.description||"Meal")}${m.meal?` <span style="color:#8b96a5">· ${esc(m.meal)}</span>`:""}</span><span class="mk">${Math.round(m.calories||0)} kcal · ${Math.round(m.protein||0)}p ${Math.round(m.carbs||0)}c ${Math.round(m.fat||0)}f</span></div>`).join(""):`<div class="rep-none">No meals logged</div>`;
+    const wt=day.weight?` · ${day.weight} lbs`:"";
+    const wat=day.water_oz?` · ${day.water_oz} oz water`:"";
+    return `<div class="rep-day"><div class="dh"><span>${fmtDate(d)}</span><span>${Math.round(t.cal)} kcal · ${Math.round(t.pro)}p ${Math.round(t.carb)}c ${Math.round(t.fat)}f · ${Math.round(t.fib)}fib${wt}${wat}</span></div>${mealRows}</div>`;
+  }).join("");
+  const avg=k=>logged?Math.round(sums[k]/logged):0;
+  const shotsIn=Store.listShots().filter(s=>s.date>=dates[0]&&s.date<=end)
+    .map(s=>`${fmtDate(s.date)} — ${s.dose}mg, ${esc(s.site||"")}${s.sideEffects?.length?` (${s.sideEffects.map(esc).join(", ")})`:""}`);
+  const shotHtml=shotsIn.length?`<div class="rep-day"><div class="dh"><span>Injections</span></div>${shotsIn.map(x=>`<div class="rep-meal"><span>${x}</span></div>`).join("")}</div>`:"";
+  $("rep-doc").innerHTML=`
+    <h2>Cycle — Nutrition Report</h2>
+    <div class="sub">${fmtDate(dates[0])} – ${fmtDate(end)} · ${days} days · averages over ${logged} logged day${logged===1?"":"s"}</div>
+    <div class="avg">
+      <div><div class="n">${avg("cal")}</div><div class="k">kcal</div></div>
+      <div><div class="n">${avg("pro")}</div><div class="k">protein</div></div>
+      <div><div class="n">${avg("carb")}</div><div class="k">carbs</div></div>
+      <div><div class="n">${avg("fat")}</div><div class="k">fat</div></div>
+      <div><div class="n">${avg("fib")}</div><div class="k">fiber</div></div>
+    </div>
+    <div class="sub" style="margin-bottom:4px">Daily goals: ${goals.cal} kcal · ${goals.pro}p · ${goals.carb}c · ${goals.fat}f · ${goals.fib}fib</div>
+    ${shotHtml}${dayHtml}`;
+  $("report-ov").classList.add("on");
+  document.body.style.overflow="hidden";
+}
+function closeReport(){$("report-ov").classList.remove("on");document.body.style.overflow="";}
 function loadGoalsUI(){$("g-cal").value=goals.cal;$("g-pro").value=goals.pro;$("g-carb").value=goals.carb;$("g-fat").value=goals.fat;$("g-fib").value=goals.fib;}
 function saveGoals(){
   goals={cal:+$("g-cal").value||DEFAULT_GOALS.cal,pro:+$("g-pro").value||DEFAULT_GOALS.pro,carb:+$("g-carb").value||DEFAULT_GOALS.carb,fat:+$("g-fat").value||DEFAULT_GOALS.fat,fib:+$("g-fib").value||DEFAULT_GOALS.fib};
@@ -564,7 +684,7 @@ async function boot(){
     await Store.sync();
     $("status-text").innerHTML="Connected to Supabase. Everything you log syncs and is backed up.";
     $("synced").textContent="Synced "+new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
-    renderToday();
+    renderToday();renderFood();
   }catch(e){
     $("status-text").innerHTML="Not syncing yet. The exact error is below — this tells us the fix:<br><br><code style='color:var(--danger);font-size:12px;word-break:break-all'>"+esc(e.message||String(e))+"</code>";
     $("synced").textContent="Working offline";
