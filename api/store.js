@@ -15,7 +15,7 @@ const URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_KEY;
 
 // logical name -> real Postgres table. Only these may be touched.
-const TABLES = { food: "food_log", shots: "shots", daily: "daily" };
+const TABLES = { food: "food_log", shots: "shots", daily: "daily", workouts: "workouts" };
 
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
