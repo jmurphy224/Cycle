@@ -158,11 +158,47 @@
   .se{background:var(--surface2);border:1px solid var(--line);border-radius:20px;padding:7px 12px;font-size:12.5px;color:var(--muted)}
   .se.on{background:var(--accent-dim);border-color:var(--accent);color:var(--text)}
 
+  /* movement */
+  .ex{background:var(--surface2);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px}
+  .ex-head{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+  .ex-head input{flex:1;background:transparent;border:none;border-bottom:1px solid var(--line);border-radius:0;padding:6px 2px;font-weight:500}
+  .ex-head .rm{color:var(--faint);font-size:20px;padding:2px 6px;line-height:1}
+  .setcap,.setrow{display:grid;grid-template-columns:24px 1fr 1fr 24px;gap:7px;align-items:center}
+  .setcap{margin-top:6px}
+  .setcap span{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;text-align:center}
+  .setrow{margin-top:6px}
+  .setrow .n{font-size:11px;color:var(--faint);text-align:center;font-variant-numeric:tabular-nums}
+  .setrow input{padding:9px 6px;font-size:14px;text-align:center;font-variant-numeric:tabular-nums}
+  .setrow .rm{color:var(--faint);font-size:17px;line-height:1;text-align:center;padding:0}
+  .addbtn{width:100%;background:transparent;border:1px dashed var(--line);border-radius:11px;padding:10px;color:var(--muted);font-size:13px}
+  .addbtn:active{border-color:var(--accent-dim)}
+  .energy{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+  .energy div{background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:10px 2px;text-align:center;font-family:var(--disp);font-weight:600;font-size:14px;color:var(--muted)}
+  .energy div.sel{background:var(--accent);color:#0d1014;border-color:var(--accent)}
+  .opts{display:flex;flex-wrap:wrap;gap:7px}
+  .opt{background:var(--surface2);border:1px solid var(--line);border-radius:20px;padding:8px 13px;font-size:12.5px;color:var(--muted)}
+  .opt.sel{background:var(--accent-dim);border-color:var(--accent);color:var(--text)}
+  .plan{border:1px solid var(--accent-dim);background:var(--surface);border-radius:14px;padding:14px;margin-top:14px}
+  .plan h4{font-family:var(--disp);font-size:16px;font-weight:600;margin-bottom:3px}
+  .plan .why{font-size:12.5px;color:var(--muted);margin-bottom:8px}
+  .plan .blk{display:flex;justify-content:space-between;gap:12px;font-size:13.5px;padding:7px 0;border-top:1px solid var(--line)}
+  .plan .blk .bn{flex:1;min-width:0}
+  .plan .blk .bs{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .plan .blk .note{display:block;font-size:11.5px;color:var(--faint);margin-top:2px}
+  .volrow{display:flex;align-items:baseline;gap:8px}
+  .volrow .big{font-family:var(--disp);font-weight:700;font-size:26px}
+  .volrow .u{font-size:13px;color:var(--muted)}
+  .spark{display:flex;align-items:flex-end;gap:4px;height:46px;margin-top:14px}
+  .spark i{flex:1;background:var(--accent-dim);border-radius:3px 3px 0 0;min-height:2px}
+  .spark i.now{background:var(--accent)}
+  .sparkx{display:flex;gap:4px;margin-top:5px}
+  .sparkx span{flex:1;text-align:center;font-size:9.5px;color:var(--faint)}
+
   /* nav */
   nav{position:fixed;bottom:0;left:0;right:0;background:rgba(13,16,20,.92);backdrop-filter:blur(14px);
     border-top:1px solid var(--line);display:flex;justify-content:center;gap:4px;
     padding:8px 8px calc(8px + var(--safe-b));z-index:20}
-  nav button{flex:1;max-width:120px;display:flex;flex-direction:column;align-items:center;gap:4px;
+  nav button{flex:1;max-width:96px;display:flex;flex-direction:column;align-items:center;gap:4px;
     padding:6px 0;color:var(--faint);font-size:10.5px;font-weight:500;letter-spacing:0.02em}
   nav button svg{width:23px;height:23px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
   nav button.on{color:var(--accent)}
@@ -186,7 +222,7 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="logo"><b></b>Weight Loss Journey</b></div>
+    <div class="logo">Weight Loss <b>Journey</b></div>
     <div class="datenav">
       <button class="arrow" onclick="stepDay(-1)">‹</button>
       <div class="dpick">
@@ -236,6 +272,11 @@
         </div>
       </div>
     </div>
+
+    <div class="card">
+      <h3>Movement</h3>
+      <div id="move-today"></div>
+    </div>
   </section>
 
   <!-- ===== FOOD ===== -->
@@ -277,6 +318,67 @@
     <div class="card">
       <h3>Logged today</h3>
       <div id="food-list"></div>
+    </div>
+  </section>
+
+  <!-- ===== MOVE ===== -->
+  <section class="tab" id="tab-move">
+    <div class="card ai">
+      <h3>What should I do today?</h3>
+      <label class="fld">Time available</label>
+      <div class="opts" id="mv-time"></div>
+      <div style="height:14px"></div>
+      <label class="fld">Where</label>
+      <div class="opts" id="mv-place"></div>
+      <div style="height:14px"></div>
+      <label class="fld">Energy today</label>
+      <div class="energy" id="mv-energy"></div>
+      <div style="height:14px"></div>
+      <label class="fld">Sore or off-limits</label>
+      <input id="mv-limits" placeholder="e.g. low back tight, skip overhead" />
+      <div style="height:12px"></div>
+      <button class="btn sm" onclick="aiPlan()">Suggest a session</button>
+      <div class="ai-status" id="mv-status"></div>
+      <div id="mv-plan"></div>
+    </div>
+
+    <div class="card">
+      <h3>Log a session</h3>
+      <div class="seg" id="w-mod">
+        <button data-m="strength" class="on">Strength</button>
+        <button data-m="cardio">Cardio</button>
+        <button data-m="mobility">Mobility</button>
+      </div>
+      <div style="height:12px"></div>
+      <label class="fld">Session name</label>
+      <input id="w-title" placeholder="e.g. Push A" />
+      <div style="height:10px"></div>
+      <div class="row">
+        <div><label class="fld">Minutes</label><input id="w-dur" inputmode="numeric" /></div>
+        <div><label class="fld">Effort 1–10</label><input id="w-rpe" inputmode="numeric" /></div>
+      </div>
+      <div id="w-exwrap">
+        <div style="height:14px"></div>
+        <label class="fld">Exercises</label>
+        <div id="w-ex"></div>
+        <button class="addbtn" onclick="addEx()">+ Add exercise</button>
+      </div>
+      <div style="height:12px"></div>
+      <textarea id="w-notes" placeholder="Notes (optional)"></textarea>
+      <div style="height:12px"></div>
+      <button class="btn" onclick="saveWorkout()">Log session</button>
+    </div>
+
+    <div class="card">
+      <h3>Logged this day</h3>
+      <div id="w-list"></div>
+    </div>
+
+    <div class="card">
+      <h3>Weekly volume</h3>
+      <div class="volrow"><span class="big num" id="vol-now">0</span><span class="u">lbs moved this week</span></div>
+      <div class="spark" id="vol-spark"></div>
+      <div class="sparkx" id="vol-x"></div>
     </div>
   </section>
 
@@ -345,6 +447,8 @@
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Today</button>
   <button data-tab="food" onclick="go('food')">
     <svg viewBox="0 0 24 24"><path d="M5 3v7a3 3 0 0 0 6 0V3M8 3v18M19 3c-1.5 0-3 2-3 5s1 4 3 4v9"/></svg>Food</button>
+  <button data-tab="move" onclick="go('move')">
+    <svg viewBox="0 0 24 24"><path d="M6.5 6.5v11M3.5 9v6M17.5 6.5v11M20.5 9v6M6.5 12h11"/></svg>Move</button>
   <button data-tab="shot" onclick="go('shot')">
     <svg viewBox="0 0 24 24"><path d="M18 6l-9 9-3 3-2 2M14 10l3-3M16 4l4 4M9 15l-2-2"/></svg>Shot</button>
   <button data-tab="you" onclick="go('you')">
@@ -369,7 +473,7 @@
    ========================================================================= */
 const Store = (() => {
   const PROXY="/api/store";
-  const LS={food:"cycle.food",shots:"cycle.shots",daily:"cycle.daily",settings:"cycle.settings",queue:"cycle.queue"};
+  const LS={food:"cycle.food",shots:"cycle.shots",workouts:"cycle.workouts",daily:"cycle.daily",settings:"cycle.settings",queue:"cycle.queue"};
   const read=(k,f)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):f}catch{return f}};
   const write=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}};
   async function call(body){
@@ -386,6 +490,8 @@ const Store = (() => {
   const fromFood=r=>({id:r.id,date:r.date,meal:r.meal,description:r.description,calories:r.calories,protein:r.protein,carbs:r.carbs,fat:r.fat,fiber:r.fiber,source:r.source});
   const toShot=e=>clean({date:e.date,dose:e.dose,site:e.site,side_effects:e.sideEffects,notes:e.notes});
   const fromShot=r=>({id:r.id,date:r.date,dose:r.dose,site:r.site,sideEffects:r.side_effects||[],notes:r.notes});
+  const toWorkout=e=>clean({date:e.date,modality:e.modality,title:e.title,duration_min:e.duration_min,rpe:e.rpe,exercises:e.exercises,notes:e.notes});
+  const fromWorkout=r=>({id:r.id,date:r.date,modality:r.modality,title:r.title,duration_min:r.duration_min,rpe:r.rpe,exercises:r.exercises||[],notes:r.notes});
   const toDaily=d=>clean({date:d.date,weight:d.weight,water_oz:d.water_oz});
   const fromDaily=r=>({date:r.date,weight:r.weight??null,water_oz:r.water_oz||0});
 
@@ -410,6 +516,19 @@ const Store = (() => {
   }
   const listShots=()=>read(LS.shots,[]);
 
+  async function addWorkout(e){
+    const tmp={...e,id:"tmp_"+Date.now()};write(LS.workouts,[tmp,...read(LS.workouts,[])]);
+    const op={action:"insert",table:"workouts",rows:[toWorkout(e)]};
+    try{const rec=(await call(op))?.[0];if(rec?.id!=null)write(LS.workouts,read(LS.workouts,[]).map(w=>w.id===tmp.id?fromWorkout(rec):w));}
+    catch{enqueue(op);} return tmp;
+  }
+  async function deleteWorkout(id){
+    write(LS.workouts,read(LS.workouts,[]).filter(w=>w.id!==id));
+    if(String(id).startsWith("tmp_"))return;
+    const op={action:"delete",table:"workouts",id};try{await call(op)}catch{enqueue(op)}
+  }
+  const listWorkouts=d=>{const a=read(LS.workouts,[]);return d?a.filter(w=>w.date===d):a};
+
   const getDay=d=>read(LS.daily,{})[d]||{date:d,water_oz:0,weight:null};
   async function setDay(d,patch){
     const days=read(LS.daily,{});const next={...(days[d]||{date:d,water_oz:0,weight:null}),...patch};
@@ -428,9 +547,14 @@ const Store = (() => {
     write(LS.shots,(shots||[]).map(fromShot));
     const daily=await call({action:"list",table:"daily"});
     const m={};(daily||[]).forEach(r=>{const d=fromDaily(r);m[d.date]=d});write(LS.daily,m);
+    // workouts is newer than the rest — don't let a missing table break the whole sync
+    try{
+      const wk=await call({action:"list",table:"workouts",order:{col:"date",asc:false}});
+      write(LS.workouts,(wk||[]).map(fromWorkout));
+    }catch(e){console.warn("workouts not syncing yet:",e.message||e);}
     await flush();
   }
-  return {addFood,deleteFood,listFood,addShot,listShots,getDay,setDay,getSettings,setSettings,sync};
+  return {addFood,deleteFood,listFood,addShot,listShots,addWorkout,deleteWorkout,listWorkouts,getDay,setDay,getSettings,setSettings,sync};
 })();
 
 /* =========================================================================
@@ -456,6 +580,7 @@ function go(tab){
   $("tab-"+tab).classList.add("on");
   document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));
   if(tab==="food")renderFood();
+  if(tab==="move")renderMove();
   if(tab==="shot")renderShot();
   window.scrollTo(0,0);
 }
@@ -477,7 +602,7 @@ function jumpDay(v){
   viewDate=v>today()?today():v;refreshDay();
 }
 function refreshDay(){
-  renderDateNav();renderToday();renderFood();
+  renderDateNav();renderToday();renderFood();renderMove();
 }
 
 /* ---- TODAY ---- */
@@ -506,6 +631,7 @@ function renderToday(){
   }).join("");
 
   $("water-amt").textContent=Store.getDay(viewDate).water_oz;
+  renderMoveToday();
   renderDial();
 }
 function renderDial(){
@@ -589,6 +715,177 @@ async function aiAsk(){
   }catch(e){s.textContent=e.message||"AI unavailable.";}
 }
 
+/* ---- MOVE ---- */
+const TIMES=[15,30,45,60];
+const PLACES=["Home","Gym","Hotel","Bodyweight"];
+let planPick={time:30,place:"Home",energy:3};
+let woDraft={exercises:[]};
+let lastPlan=null;
+
+function renderMove(){renderMoveOpts();renderEx();renderWorkoutList();renderVolume();}
+
+function renderMoveOpts(){
+  $("mv-time").innerHTML=TIMES.map(t=>`<div class="opt ${t===planPick.time?"sel":""}" onclick="pickTime(${t})">${t} min</div>`).join("");
+  $("mv-place").innerHTML=PLACES.map(p=>`<div class="opt ${p===planPick.place?"sel":""}" onclick="pickPlace('${p}')">${p}</div>`).join("");
+  $("mv-energy").innerHTML=[1,2,3,4,5].map(n=>`<div class="${n===planPick.energy?"sel":""}" onclick="pickEnergy(${n})">${n}</div>`).join("");
+}
+function pickTime(t){planPick.time=t;renderMoveOpts();}
+function pickPlace(p){planPick.place=p;renderMoveOpts();}
+function pickEnergy(n){planPick.energy=n;renderMoveOpts();}
+
+/* modality switch — exercise builder only makes sense for strength */
+document.querySelectorAll("#w-mod button").forEach(b=>b.onclick=()=>{
+  document.querySelectorAll("#w-mod button").forEach(x=>x.classList.remove("on"));b.classList.add("on");
+  $("w-exwrap").style.display=b.dataset.m==="strength"?"":"none";
+});
+function selectedMod(){return document.querySelector("#w-mod button.on")?.dataset.m||"strength";}
+
+/* exercise + set builder. Typing mutates the draft only — never re-renders,
+   so the keyboard and cursor stay put mid-set. */
+function addEx(name){woDraft.exercises.push({name:name||"",sets:[{reps:"",weight:""}]});renderEx();}
+function delEx(i){woDraft.exercises.splice(i,1);renderEx();}
+function setExName(i,v){woDraft.exercises[i].name=v;}
+function setCell(i,j,k,v){woDraft.exercises[i].sets[j][k]=v;}
+function addSet(i){
+  const s=woDraft.exercises[i].sets,prev=s[s.length-1]||{reps:"",weight:""};
+  s.push({reps:prev.reps,weight:prev.weight});   // carry the last set forward
+  renderEx();
+}
+function delSet(i,j){
+  const s=woDraft.exercises[i].sets;s.splice(j,1);
+  if(!s.length)s.push({reps:"",weight:""});
+  renderEx();
+}
+function renderEx(){
+  const el=$("w-ex");if(!el)return;
+  if(!woDraft.exercises.length){el.innerHTML=`<div class="empty" style="padding:16px 10px">Nothing added yet</div>`;return;}
+  el.innerHTML=woDraft.exercises.map((ex,i)=>`
+    <div class="ex">
+      <div class="ex-head">
+        <input value="${esc(ex.name)}" placeholder="Exercise" oninput="setExName(${i},this.value)" />
+        <button class="rm" onclick="delEx(${i})">×</button>
+      </div>
+      <div class="setcap"><span></span><span>reps</span><span>lbs</span><span></span></div>
+      ${ex.sets.map((s,j)=>`
+        <div class="setrow">
+          <div class="n">${j+1}</div>
+          <input inputmode="numeric" value="${esc(s.reps)}" oninput="setCell(${i},${j},'reps',this.value)" />
+          <input inputmode="decimal" value="${esc(s.weight)}" oninput="setCell(${i},${j},'weight',this.value)" />
+          <button class="rm" onclick="delSet(${i},${j})">×</button>
+        </div>`).join("")}
+      <div style="height:10px"></div>
+      <button class="addbtn" onclick="addSet(${i})">+ Set</button>
+    </div>`).join("");
+}
+
+const volumeOf=w=>(w.exercises||[]).reduce((a,e)=>a+(e.sets||[]).reduce((b,s)=>b+(+s.reps||0)*(+s.weight||0),0),0);
+const setsOf=w=>(w.exercises||[]).reduce((a,e)=>a+(e.sets||[]).length,0);
+
+async function saveWorkout(){
+  const mod=selectedMod();
+  const exercises=mod==="strength"
+    ? woDraft.exercises.filter(e=>e.name.trim()).map(e=>({
+        name:e.name.trim(),
+        sets:e.sets.filter(s=>s.reps!==""||s.weight!=="").map(s=>({reps:+s.reps||0,weight:+s.weight||0}))
+      }))
+    : [];
+  const title=$("w-title").value.trim();
+  if(!title&&!exercises.length)return toast("Name it or add an exercise");
+  await Store.addWorkout({
+    date:viewDate,modality:mod,title:title||(mod==="cardio"?"Cardio":"Session"),
+    duration_min:+$("w-dur").value||null,rpe:+$("w-rpe").value||null,
+    exercises,notes:$("w-notes").value.trim()||null
+  });
+  woDraft={exercises:[]};["w-title","w-dur","w-rpe","w-notes"].forEach(i=>$(i).value="");
+  lastPlan=null;$("mv-plan").innerHTML="";
+  renderMove();renderToday();toast("Session logged ✓");
+}
+async function removeWorkout(id){await Store.deleteWorkout(id);renderMove();renderToday();toast("Removed");}
+
+function renderWorkoutList(){
+  const list=Store.listWorkouts(viewDate),el=$("w-list");if(!el)return;
+  if(!list.length){el.innerHTML=`<div class="empty"><b>Nothing logged</b>Ask for a session above, or log one manually.</div>`;return;}
+  el.innerHTML=list.map(w=>{
+    const v=volumeOf(w),n=setsOf(w);
+    const bits=[w.modality,w.duration_min?w.duration_min+" min":null,w.rpe?"RPE "+w.rpe:null,n?n+" sets":null,v?Math.round(v).toLocaleString()+" lbs":null].filter(Boolean);
+    return `<div class="entry"><div class="meta"><div class="t">${esc(w.title||"Session")}</div>
+      <div class="s">${bits.map(esc).join(" · ")}</div></div>
+      <button class="del" onclick="removeWorkout('${w.id}')">×</button></div>`;
+  }).join("");
+}
+function renderMoveToday(){
+  const el=$("move-today");if(!el)return;
+  const list=Store.listWorkouts(viewDate);
+  if(!list.length){
+    const dates=Store.listWorkouts().map(w=>w.date).sort();
+    const last=dates[dates.length-1];
+    el.innerHTML=`<div class="muted" style="font-size:13.5px">Nothing logged${last?` · last session ${daysAgo(last)}`:""}</div>`;
+    return;
+  }
+  el.innerHTML=list.map(w=>{
+    const v=volumeOf(w);
+    return `<div class="entry"><div class="meta"><div class="t">${esc(w.title||"Session")}</div>
+      <div class="s">${esc(w.modality||"")}${w.duration_min?" · "+w.duration_min+" min":""}${v?" · "+Math.round(v).toLocaleString()+" lbs":""}</div></div></div>`;
+  }).join("");
+}
+function renderVolume(){
+  const el=$("vol-spark");if(!el)return;
+  const end=today(),all=Store.listWorkouts(),weeks=[];
+  for(let w=7;w>=0;w--){
+    const start=addDays(end,-(w*7+6)),stop=addDays(end,-w*7);
+    let v=0;all.forEach(x=>{if(x.date>=start&&x.date<=stop)v+=volumeOf(x)});
+    weeks.push(v);
+  }
+  const max=Math.max(1,...weeks);
+  $("vol-now").textContent=Math.round(weeks[7]).toLocaleString();
+  el.innerHTML=weeks.map((v,i)=>`<i class="${i===7?"now":""}" style="height:${Math.max(2,Math.round(v/max*46))}px"></i>`).join("");
+  $("vol-x").innerHTML=weeks.map((v,i)=>`<span>${i===0?"8 wk":i===7?"now":""}</span>`).join("");
+}
+
+async function aiPlan(){
+  const s=$("mv-status");s.textContent="Thinking…";$("mv-plan").innerHTML="";
+  try{
+    const recent=Store.listWorkouts().filter(w=>w.date>=addDays(today(),-13))
+      .sort((a,b)=>a.date<b.date?1:-1)
+      .map(w=>`${w.date} · ${w.modality} · ${w.title||"session"} · ${(w.exercises||[]).map(e=>`${e.name} ${(e.sets||[]).length}x`).join(", ")||"—"}${w.rpe?` · RPE ${w.rpe}`:""}`)
+      .join("\n")||"No sessions logged in the last 14 days.";
+    const t=todayTotals();
+    const shotDates=Store.listShots().map(x=>x.date).sort();
+    const sinceShot=shotDates.length?Math.floor((new Date(today())-new Date(shotDates[shotDates.length-1]))/86400000):null;
+    const ctx=`Last 14 days of training:\n${recent}\n\nToday: ${planPick.time} minutes available, location ${planPick.place}, energy ${planPick.energy}/5. Sore or off-limits: ${$("mv-limits").value.trim()||"nothing"}. Eaten so far: ${Math.round(t.cal)} kcal and ${Math.round(t.pro)}g protein against a ${goals.cal} kcal / ${goals.pro}g target.${sinceShot!==null?` ${sinceShot} days since last injection.`:""}`;
+    const sys=`You program training for a GLP-1 (tirzepatide) user in a calorie deficit. Preserving lean mass is the priority, so bias toward resistance training. Balance movement patterns against what was trained recently and never hit the same muscle group two days running. Treat energy as a real constraint: at 1-2 out of 5, return a genuinely easy session, not a shortened hard one. Respect stated sore or off-limits areas absolutely. Fit the time available and the equipment implied by the location. Suggest only — never prescribe volume or intensity tied to calorie intake. Reply with ONLY a JSON object, no prose, no markdown fences: {"title":"short name","modality":"strength|cardio|mobility","duration_min":int,"rationale":"one sentence on why this session today","blocks":[{"name":"exercise","sets":int,"reps":"8-10","note":"optional short cue"}]}. For cardio or mobility use sets:1 and put the duration or hold time in reps.`;
+    const raw=await callAI(sys,ctx);
+    lastPlan=JSON.parse(raw.replace(/```json|```/g,"").trim());
+    s.textContent="";renderPlan(lastPlan);
+  }catch(e){s.textContent=e.message||"Couldn't build a plan — log manually below.";}
+}
+function renderPlan(p){
+  $("mv-plan").innerHTML=`<div class="plan">
+    <h4>${esc(p.title||"Session")}</h4>
+    <div class="why">${esc(p.rationale||"")}${p.duration_min?` · ~${p.duration_min} min`:""}</div>
+    ${(p.blocks||[]).map(b=>`<div class="blk">
+      <span class="bn">${esc(b.name||"")}${b.note?`<span class="note">${esc(b.note)}</span>`:""}</span>
+      <span class="bs">${esc(String(b.sets||1))} × ${esc(String(b.reps||""))}</span></div>`).join("")}
+    <div style="height:14px"></div>
+    <button class="btn sm" onclick="usePlan()">Load into log</button>
+  </div>`;
+}
+function usePlan(){
+  if(!lastPlan)return;
+  const p=lastPlan,mod=p.modality||"strength";
+  document.querySelectorAll("#w-mod button").forEach(x=>x.classList.toggle("on",x.dataset.m===mod));
+  $("w-exwrap").style.display=mod==="strength"?"":"none";
+  $("w-title").value=p.title||"";
+  $("w-dur").value=p.duration_min||"";
+  woDraft.exercises=(p.blocks||[]).map(b=>({
+    name:b.name||"",
+    sets:Array.from({length:Math.max(1,Math.min(8,+b.sets||1))},()=>({reps:"",weight:""}))
+  }));
+  renderEx();
+  $("w-title").scrollIntoView({behavior:"smooth",block:"center"});
+  toast("Loaded — fill in your numbers");
+}
+
 /* ---- SHOT ---- */
 function renderShot(){
   $("doses").innerHTML=DOSES.map(d=>`<div class="dose ${d===shotDraft.dose?"sel":""}" onclick="pickDose(${d})">${d}</div>`).join("");
@@ -642,11 +939,21 @@ function buildReport(days){
     const day=Store.getDay(d);
     if(meals.length){logged++;sums.cal+=t.cal;sums.pro+=t.pro;sums.carb+=t.carb;sums.fat+=t.fat;sums.fib+=t.fib;}
     const mealRows=meals.length?meals.map(m=>`<div class="rep-meal"><span>${esc(m.description||"Meal")}${m.meal?` <span style="color:#8b96a5">· ${esc(m.meal)}</span>`:""}</span><span class="mk">${Math.round(m.calories||0)} kcal · ${Math.round(m.protein||0)}p ${Math.round(m.carbs||0)}c ${Math.round(m.fat||0)}f</span></div>`).join(""):`<div class="rep-none">No meals logged</div>`;
+    const wos=Store.listWorkouts(d);
+    const woRows=wos.map(w=>{
+      const v=volumeOf(w);
+      const det=[w.duration_min?w.duration_min+" min":null,setsOf(w)?setsOf(w)+" sets":null,v?Math.round(v).toLocaleString()+" lbs":null,w.rpe?"RPE "+w.rpe:null].filter(Boolean).join(" · ");
+      return `<div class="rep-meal"><span>Training: ${esc(w.title||"Session")} <span style="color:#8b96a5">· ${esc(w.modality||"")}</span></span><span class="mk">${det}</span></div>`;
+    }).join("");
     const wt=day.weight?` · ${day.weight} lbs`:"";
     const wat=day.water_oz?` · ${day.water_oz} oz water`:"";
-    return `<div class="rep-day"><div class="dh"><span>${fmtDate(d)}</span><span>${Math.round(t.cal)} kcal · ${Math.round(t.pro)}p ${Math.round(t.carb)}c ${Math.round(t.fat)}f · ${Math.round(t.fib)}fib${wt}${wat}</span></div>${mealRows}</div>`;
+    return `<div class="rep-day"><div class="dh"><span>${fmtDate(d)}</span><span>${Math.round(t.cal)} kcal · ${Math.round(t.pro)}p ${Math.round(t.carb)}c ${Math.round(t.fat)}f · ${Math.round(t.fib)}fib${wt}${wat}</span></div>${mealRows}${woRows}</div>`;
   }).join("");
   const avg=k=>logged?Math.round(sums[k]/logged):0;
+  const trainIn=Store.listWorkouts().filter(w=>w.date>=dates[0]&&w.date<=end);
+  const trainCount=trainIn.length;
+  const trainVol=trainIn.reduce((a,w)=>a+volumeOf(w),0);
+  const trainMin=trainIn.reduce((a,w)=>a+(+w.duration_min||0),0);
   const shotsIn=Store.listShots().filter(s=>s.date>=dates[0]&&s.date<=end)
     .map(s=>`${fmtDate(s.date)} — ${s.dose}mg, ${esc(s.site||"")}${s.sideEffects?.length?` (${s.sideEffects.map(esc).join(", ")})`:""}`);
   const shotHtml=shotsIn.length?`<div class="rep-day"><div class="dh"><span>Injections</span></div>${shotsIn.map(x=>`<div class="rep-meal"><span>${x}</span></div>`).join("")}</div>`:"";
@@ -661,6 +968,7 @@ function buildReport(days){
       <div><div class="n">${avg("fib")}</div><div class="k">fiber</div></div>
     </div>
     <div class="sub" style="margin-bottom:4px">Daily goals: ${goals.cal} kcal · ${goals.pro}p · ${goals.carb}c · ${goals.fat}f · ${goals.fib}fib</div>
+    <div class="sub" style="margin-bottom:4px">Training: ${trainCount} session${trainCount===1?"":"s"} over ${days} days${trainVol?` · ${Math.round(trainVol).toLocaleString()} lbs total volume`:""}${trainMin?` · ${trainMin} active minutes`:""}</div>
     ${shotHtml}${dayHtml}`;
   $("report-ov").classList.add("on");
   document.body.style.overflow="hidden";
@@ -679,12 +987,12 @@ function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&l
 /* ---- boot ---- */
 async function boot(){
   const s=Store.getSettings();if(s.goals)goals={...DEFAULT_GOALS,...s.goals};
-  loadGoalsUI();renderToday();
+  loadGoalsUI();renderToday();renderMove();
   try{
     await Store.sync();
     $("status-text").innerHTML="Connected to Supabase. Everything you log syncs and is backed up.";
     $("synced").textContent="Synced "+new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
-    renderToday();renderFood();
+    renderToday();renderFood();renderMove();
   }catch(e){
     $("status-text").innerHTML="Not syncing yet. The exact error is below — this tells us the fix:<br><br><code style='color:var(--danger);font-size:12px;word-break:break-all'>"+esc(e.message||String(e))+"</code>";
     $("synced").textContent="Working offline";
