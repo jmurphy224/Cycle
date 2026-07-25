@@ -181,10 +181,20 @@
   .plan{border:1px solid var(--accent-dim);background:var(--surface);border-radius:14px;padding:14px;margin-top:14px}
   .plan h4{font-family:var(--disp);font-size:16px;font-weight:600;margin-bottom:3px}
   .plan .why{font-size:12.5px;color:var(--muted);margin-bottom:8px}
-  .plan .blk{display:flex;justify-content:space-between;gap:12px;font-size:13.5px;padding:7px 0;border-top:1px solid var(--line)}
+  .plan .blk{font-size:13.5px;padding:7px 0;border-top:1px solid var(--line)}
+  .plan .blk .blkrow{display:flex;justify-content:space-between;gap:12px}
   .plan .blk .bn{flex:1;min-width:0}
-  .plan .blk .bs{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .plan .blk .bs{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;display:flex;align-items:center;gap:8px}
   .plan .blk .note{display:block;font-size:11.5px;color:var(--faint);margin-top:2px}
+  .vidlink{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--accent-dim);color:var(--accent);flex:0 0 auto}
+  .vidlink svg{width:11px;height:11px;fill:currentColor;margin-left:1px}
+  .vidlink.open{background:var(--accent);color:#0d1014}
+  .ex-head .vidlink{margin-left:2px}
+  .vidbox{max-height:0;overflow:hidden;transition:max-height .25s ease}
+  .vidbox.open{max-height:260px;margin-top:10px}
+  .vidwrap{position:relative;padding-top:56.25%;height:0;border-radius:10px;overflow:hidden;background:#000}
+  .vidwrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+  .vidfallback{display:block;text-align:center;font-size:11px;color:var(--muted);margin-top:6px}
   .volrow{display:flex;align-items:baseline;gap:8px}
   .volrow .big{font-family:var(--disp);font-weight:700;font-size:26px}
   .volrow .u{font-size:13px;color:var(--muted)}
@@ -763,8 +773,10 @@ function renderEx(){
     <div class="ex">
       <div class="ex-head">
         <input value="${esc(ex.name)}" placeholder="Exercise" oninput="setExName(${i},this.value)" />
+        ${videoLink(ex.name,"ev-"+i)}
         <button class="rm" onclick="delEx(${i})">×</button>
       </div>
+      <div class="vidbox" id="ev-${i}"></div>
       <div class="setcap"><span></span><span>reps</span><span>lbs</span><span></span></div>
       ${ex.sets.map((s,j)=>`
         <div class="setrow">
@@ -859,13 +871,27 @@ async function aiPlan(){
     s.textContent="";renderPlan(lastPlan);
   }catch(e){s.textContent=e.message||"Couldn't build a plan — log manually below.";}
 }
+const ytEmbedUrl=name=>`https://www.youtube.com/embed?autoplay=1&listType=search&list=${encodeURIComponent(name+" exercise form")}`;
+const ytSearchUrl=name=>`https://www.youtube.com/results?search_query=${encodeURIComponent(name+" exercise form")}`;
+const videoLink=(name,id)=>name?`<button type="button" class="vidlink" data-vid="${id}" data-name="${esc(name)}" onclick="event.stopPropagation();toggleVideo(this)" title="Watch ${esc(name)}"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></button>`:"";
+function toggleVideo(btn){
+  const box=document.getElementById(btn.dataset.vid);if(!box)return;
+  const name=btn.dataset.name;
+  const open=box.classList.toggle("open");
+  btn.classList.toggle("open",open);
+  box.innerHTML=open?`<div class="vidwrap"><iframe src="${ytEmbedUrl(name)}" title="${esc(name)}" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div><a class="vidfallback" href="${ytSearchUrl(name)}" target="_blank" rel="noopener">Trouble playing? Open in YouTube ↗</a>`:"";
+}
 function renderPlan(p){
   $("mv-plan").innerHTML=`<div class="plan">
     <h4>${esc(p.title||"Session")}</h4>
     <div class="why">${esc(p.rationale||"")}${p.duration_min?` · ~${p.duration_min} min`:""}</div>
-    ${(p.blocks||[]).map(b=>`<div class="blk">
-      <span class="bn">${esc(b.name||"")}${b.note?`<span class="note">${esc(b.note)}</span>`:""}</span>
-      <span class="bs">${esc(String(b.sets||1))} × ${esc(String(b.reps||""))}</span></div>`).join("")}
+    ${(p.blocks||[]).map((b,i)=>`<div class="blk">
+      <div class="blkrow">
+        <span class="bn">${esc(b.name||"")}${b.note?`<span class="note">${esc(b.note)}</span>`:""}</span>
+        <span class="bs">${esc(String(b.sets||1))} × ${esc(String(b.reps||""))}${videoLink(b.name,"pv-"+i)}</span>
+      </div>
+      <div class="vidbox" id="pv-${i}"></div>
+    </div>`).join("")}
     <div style="height:14px"></div>
     <button class="btn sm" onclick="usePlan()">Load into log</button>
   </div>`;
