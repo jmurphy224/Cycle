@@ -701,22 +701,37 @@ async function callAI(system,user){
   const data=await r.json();
   return (data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("");
 }
+async function lookupNutrition(query,qty){
+  try{
+    const r=await fetch(`/api/nutrition?q=${encodeURIComponent(query)}&qty=${encodeURIComponent(qty)}`);
+    const data=await r.json();
+    return (r.ok&&data&&data.calories!=null)?data:null;
+  }catch(e){return null;}
+}
 async function aiParse(){
   const q=$("ai-input").value.trim();if(!q)return;
   const s=$("ai-status");s.textContent="Estimating…";
   try{
-    const sys=`You estimate nutrition for a GLP-1 user tracking meals. The message may describe one food or several separate foods/servings in one go — split it into one entry per distinct food so the user can check each number against the package, not just a single combined total. Reply with ONLY a JSON array, no prose, no markdown fences: [{"description":"short name that KEEPS the stated quantity or serving size, e.g. '4 Just Bare chicken tenders' or '1 serving Daisy low-fat cottage cheese'","meal":"Breakfast|Lunch|Dinner|Snack","calories":int,"protein":int,"carbs":int,"fat":int,"fiber":int}, ...]. Estimate reasonable values for each item at the exact quantity stated.`;
+    const sys=`You extract foods for a GLP-1 user tracking meals. The message may describe one food or several separate foods/servings in one go — split it into one entry per distinct food. Reply with ONLY a JSON array, no prose, no markdown fences: [{"description":"short name that KEEPS the stated quantity or serving size, e.g. '4 Just Bare chicken tenders' or '1 serving Daisy low-fat cottage cheese'","query":"clean generic food name for a nutrition database lookup, e.g. 'Just Bare chicken tenderloins' or 'Daisy low fat cottage cheese'","qty":"the amount exactly as stated, e.g. '4 tenders' or '1 serving' or '1 banana'","meal":"Breakfast|Lunch|Dinner|Snack","calories":int,"protein":int,"carbs":int,"fat":int,"fiber":int}, ...]. The calorie/protein/carbs/fat/fiber fields are a fallback only used if a database lookup misses, so still estimate them as accurately as you can for the exact quantity stated.`;
     const raw=await callAI(sys,q);
     const parsed=JSON.parse(raw.replace(/```json|```/g,"").trim());
     const items=Array.isArray(parsed)?parsed:[parsed];
-    let total=0;
+    let total=0,verified=0;
     for(const j of items){
-      await Store.addFood({date:viewDate,meal:j.meal||"Snack",description:j.description||q,source:"AI estimate",
-        calories:+j.calories||0,protein:+j.protein||0,carbs:+j.carbs||0,fat:+j.fat||0,fiber:+j.fiber||0});
-      total+=+j.calories||0;
+      let entry={date:viewDate,meal:j.meal||"Snack",description:j.description||q,source:"AI estimate",
+        calories:+j.calories||0,protein:+j.protein||0,carbs:+j.carbs||0,fat:+j.fat||0,fiber:+j.fiber||0};
+      const nd=await lookupNutrition(j.query||j.description||q,j.qty||"1 serving");
+      if(nd){
+        entry={...entry,calories:nd.calories,protein:nd.protein,carbs:nd.carbs,fat:nd.fat,fiber:nd.fiber,
+          description:entry.description+(nd.grams?` (${nd.grams}g)`:""),
+          source:"USDA"+(nd.brand?" · "+nd.brand:"")};
+        verified++;
+      }
+      await Store.addFood(entry);
+      total+=entry.calories;
     }
     $("ai-input").value="";s.textContent="";renderFood();renderToday();
-    toast((items.length>1?items.length+" items · ":"")+"Logged "+Math.round(total)+" kcal ✓");
+    toast((items.length>1?items.length+" items · ":"")+"Logged "+Math.round(total)+" kcal"+(verified?` (${verified} verified) ✓`:" ✓"));
   }catch(e){s.textContent=e.message||"Couldn't parse that — try the manual form.";}
 }
 async function aiAsk(){
