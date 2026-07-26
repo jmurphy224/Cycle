@@ -45,6 +45,33 @@ function gramsForQuantity(food, leadingNum, unitWord, isServing) {
   return null;
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// USDA's gateway occasionally blips with a non-JSON block page (shared Vercel
+// outbound IPs hitting a WAF) — a couple of quick retries usually clears it.
+async function searchFdc(url, headers, attempts = 3) {
+  let last = null;
+  for (let i = 0; i < attempts; i++) {
+    const r = await fetch(url, { headers });
+    const raw = await r.text();
+    let data;
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch {
+      last = { transient: true, status: r.status, body: raw.slice(0, 300) };
+      if (i < attempts - 1) { await sleep(250 * (i + 1)); continue; }
+      return last;
+    }
+    if (!r.ok && r.status >= 500 && i < attempts - 1) {
+      last = { transient: true, status: r.status, body: JSON.stringify(data).slice(0, 300) };
+      await sleep(250 * (i + 1));
+      continue;
+    }
+    return { ok: r.ok, status: r.status, data };
+  }
+  return last;
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -63,21 +90,16 @@ export default async function handler(req, res) {
       pageSize: "5",
       dataType: "Branded,Foundation,SR Legacy",
     });
-    const r = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?${params}`, {
-      headers: {
-        "User-Agent": "Cycle-MurphTracker/1.0 (+personal nutrition tracker)",
-        Accept: "application/json",
-        "X-Api-Key": KEY,
-      },
+    const result = await searchFdc(`https://api.nal.usda.gov/fdc/v1/foods/search?${params}`, {
+      "User-Agent": "Cycle-MurphTracker/1.0 (+personal nutrition tracker)",
+      Accept: "application/json",
+      "X-Api-Key": KEY,
     });
-    const raw = await r.text();
-    let data;
-    try {
-      data = raw ? JSON.parse(raw) : {};
-    } catch {
-      return res.status(502).json({ error: "USDA returned a non-JSON response", status: r.status, body: raw.slice(0, 300) });
+    if (result?.transient) {
+      return res.status(502).json({ error: "USDA returned a non-JSON response after retries", status: result.status, body: result.body });
     }
-    if (!r.ok) return res.status(r.status).json({ error: data?.message || data?.error?.message || "USDA search failed", detail: data });
+    const { ok, status, data } = result;
+    if (!ok) return res.status(status).json({ error: data?.message || data?.error?.message || "USDA search failed", detail: data });
     const food = (data.foods || [])[0];
     if (!food) return res.status(404).json({ error: "No match found" });
 
