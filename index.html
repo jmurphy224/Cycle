@@ -705,12 +705,18 @@ async function aiParse(){
   const q=$("ai-input").value.trim();if(!q)return;
   const s=$("ai-status");s.textContent="Estimating…";
   try{
-    const sys=`You estimate nutrition for a GLP-1 user tracking meals. Reply with ONLY a JSON object, no prose, no markdown fences: {"description":"short name","meal":"Breakfast|Lunch|Dinner|Snack","calories":int,"protein":int,"carbs":int,"fat":int,"fiber":int}. Estimate reasonable values for a single serving as described.`;
+    const sys=`You estimate nutrition for a GLP-1 user tracking meals. The message may describe one food or several separate foods/servings in one go — split it into one entry per distinct food so the user can check each number against the package, not just a single combined total. Reply with ONLY a JSON array, no prose, no markdown fences: [{"description":"short name that KEEPS the stated quantity or serving size, e.g. '4 Just Bare chicken tenders' or '1 serving Daisy low-fat cottage cheese'","meal":"Breakfast|Lunch|Dinner|Snack","calories":int,"protein":int,"carbs":int,"fat":int,"fiber":int}, ...]. Estimate reasonable values for each item at the exact quantity stated.`;
     const raw=await callAI(sys,q);
-    const j=JSON.parse(raw.replace(/```json|```/g,"").trim());
-    await Store.addFood({date:viewDate,meal:j.meal||"Snack",description:j.description||q,source:"AI estimate",
-      calories:+j.calories||0,protein:+j.protein||0,carbs:+j.carbs||0,fat:+j.fat||0,fiber:+j.fiber||0});
-    $("ai-input").value="";s.textContent="";renderFood();renderToday();toast("Logged "+(Math.round(j.calories)||0)+" kcal ✓");
+    const parsed=JSON.parse(raw.replace(/```json|```/g,"").trim());
+    const items=Array.isArray(parsed)?parsed:[parsed];
+    let total=0;
+    for(const j of items){
+      await Store.addFood({date:viewDate,meal:j.meal||"Snack",description:j.description||q,source:"AI estimate",
+        calories:+j.calories||0,protein:+j.protein||0,carbs:+j.carbs||0,fat:+j.fat||0,fiber:+j.fiber||0});
+      total+=+j.calories||0;
+    }
+    $("ai-input").value="";s.textContent="";renderFood();renderToday();
+    toast((items.length>1?items.length+" items · ":"")+"Logged "+Math.round(total)+" kcal ✓");
   }catch(e){s.textContent=e.message||"Couldn't parse that — try the manual form.";}
 }
 async function aiAsk(){
@@ -871,15 +877,24 @@ async function aiPlan(){
     s.textContent="";renderPlan(lastPlan);
   }catch(e){s.textContent=e.message||"Couldn't build a plan — log manually below.";}
 }
-const ytEmbedUrl=name=>`https://www.youtube.com/embed?autoplay=1&listType=search&list=${encodeURIComponent(name+" exercise form")}`;
 const ytSearchUrl=name=>`https://www.youtube.com/results?search_query=${encodeURIComponent(name+" exercise form")}`;
 const videoLink=(name,id)=>name?`<button type="button" class="vidlink" data-vid="${id}" data-name="${esc(name)}" onclick="event.stopPropagation();toggleVideo(this)" title="Watch ${esc(name)}"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></button>`:"";
-function toggleVideo(btn){
+async function toggleVideo(btn){
   const box=document.getElementById(btn.dataset.vid);if(!box)return;
   const name=btn.dataset.name;
   const open=box.classList.toggle("open");
   btn.classList.toggle("open",open);
-  box.innerHTML=open?`<div class="vidwrap"><iframe src="${ytEmbedUrl(name)}" title="${esc(name)}" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div><a class="vidfallback" href="${ytSearchUrl(name)}" target="_blank" rel="noopener">Trouble playing? Open in YouTube ↗</a>`:"";
+  if(!open){box.innerHTML="";return;}
+  const fallback=`<a class="vidfallback" href="${ytSearchUrl(name)}" target="_blank" rel="noopener">Search "${esc(name)} exercise form" on YouTube ↗</a>`;
+  box.innerHTML=`<div class="vidfallback">Finding a video…</div>`;
+  try{
+    const r=await fetch("/api/youtube?q="+encodeURIComponent(name+" exercise form"));
+    const data=await r.json();
+    if(!r.ok||!data.id)throw new Error();
+    box.innerHTML=`<div class="vidwrap"><iframe src="https://www.youtube-nocookie.com/embed/${data.id}?autoplay=1" title="${esc(name)}" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div><a class="vidfallback" href="${ytSearchUrl(name)}" target="_blank" rel="noopener">Trouble playing? Open in YouTube ↗</a>`;
+  }catch(e){
+    box.innerHTML=fallback;
+  }
 }
 function renderPlan(p){
   $("mv-plan").innerHTML=`<div class="plan">
