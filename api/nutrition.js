@@ -64,8 +64,14 @@ export default async function handler(req, res) {
       dataType: "Branded,Foundation,SR Legacy",
     });
     const r = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?${params}`);
-    const data = await r.json();
-    if (!r.ok) return res.status(r.status).json({ error: data?.message || "USDA search failed" });
+    const raw = await r.text();
+    let data;
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch {
+      return res.status(502).json({ error: "USDA returned a non-JSON response", status: r.status, body: raw.slice(0, 300) });
+    }
+    if (!r.ok) return res.status(r.status).json({ error: data?.message || data?.error?.message || "USDA search failed", detail: data });
     const food = (data.foods || [])[0];
     if (!food) return res.status(404).json({ error: "No match found" });
 
