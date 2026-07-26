@@ -62,8 +62,11 @@
   .rep-doc .avg .n{font-family:var(--disp);font-weight:700;font-size:18px}
   .rep-doc .avg .k{font-size:10px;color:#5a6472;text-transform:uppercase;letter-spacing:0.05em}
   .rep-day{border-top:1px solid #e4e8ee;padding:12px 0}
-  .rep-day .dh{display:flex;justify-content:space-between;font-family:var(--disp);font-weight:600;font-size:14px;margin-bottom:6px}
+  .rep-day .dh{display:flex;justify-content:space-between;font-family:var(--disp);font-weight:600;font-size:14px;margin-bottom:8px}
   .rep-day .dh span{color:#5a6472;font-weight:500}
+  .rep-day .avg{margin:0 0 10px}
+  .rep-cat-h{font-size:10px;color:#5a6472;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;margin:10px 0 2px}
+  .rep-cat-h:first-child{margin-top:0}
   .rep-meal{font-size:13px;color:#333b45;padding:2px 0;display:flex;justify-content:space-between;gap:12px}
   .rep-meal .mk{color:#8b96a5;font-variant-numeric:tabular-nums;white-space:nowrap}
   .rep-none{color:#8b96a5;font-size:13px;font-style:italic}
@@ -984,28 +987,38 @@ async function saveWeight(){
 }
 
 /* ---- REPORT ---- */
+const REPORT_MEALS=["Breakfast","Lunch","Dinner","Snack"];
 function buildReport(days){
   const end=today();
   const dates=[];for(let i=days-1;i>=0;i--)dates.push(addDays(end,-i));
-  // per-day rows + averages over days that actually have food logged
-  let sums={cal:0,pro:0,carb:0,fat:0,fib:0},logged=0;
   const dayHtml=dates.map(d=>{
     const meals=Store.listFood(d);
     const t=totalsFor(d);
     const day=Store.getDay(d);
-    if(meals.length){logged++;sums.cal+=t.cal;sums.pro+=t.pro;sums.carb+=t.carb;sums.fat+=t.fat;sums.fib+=t.fib;}
-    const mealRows=meals.length?meals.map(m=>`<div class="rep-meal"><span>${esc(m.description||"Meal")}${m.meal?` <span style="color:#8b96a5">· ${esc(m.meal)}</span>`:""}</span><span class="mk">${Math.round(m.calories||0)} kcal · ${Math.round(m.protein||0)}p ${Math.round(m.carbs||0)}c ${Math.round(m.fat||0)}f</span></div>`).join(""):`<div class="rep-none">No meals logged</div>`;
+    const byMeal={};REPORT_MEALS.forEach(c=>byMeal[c]=[]);
+    meals.forEach(m=>(byMeal[REPORT_MEALS.includes(m.meal)?m.meal:"Snack"]).push(m));
+    const catHtml=meals.length?REPORT_MEALS.map(c=>{
+      if(!byMeal[c].length)return"";
+      const rows=byMeal[c].map(m=>`<div class="rep-meal"><span>${esc(m.description||"Meal")}</span><span class="mk">${Math.round(m.calories||0)} kcal · ${Math.round(m.protein||0)}p ${Math.round(m.carbs||0)}c ${Math.round(m.fat||0)}f</span></div>`).join("");
+      return `<div class="rep-cat-h">${c}</div>${rows}`;
+    }).join(""):`<div class="rep-none">No meals logged</div>`;
     const wos=Store.listWorkouts(d);
     const woRows=wos.map(w=>{
       const v=volumeOf(w);
       const det=[w.duration_min?w.duration_min+" min":null,setsOf(w)?setsOf(w)+" sets":null,v?Math.round(v).toLocaleString()+" lbs":null,w.rpe?"RPE "+w.rpe:null].filter(Boolean).join(" · ");
       return `<div class="rep-meal"><span>Training: ${esc(w.title||"Session")} <span style="color:#8b96a5">· ${esc(w.modality||"")}</span></span><span class="mk">${det}</span></div>`;
     }).join("");
-    const wt=day.weight?` · ${day.weight} lbs`:"";
-    const wat=day.water_oz?` · ${day.water_oz} oz water`:"";
-    return `<div class="rep-day"><div class="dh"><span>${fmtDate(d)}</span><span>${Math.round(t.cal)} kcal · ${Math.round(t.pro)}p ${Math.round(t.carb)}c ${Math.round(t.fat)}f · ${Math.round(t.fib)}fib${wt}${wat}</span></div>${mealRows}${woRows}</div>`;
+    const extras=[];if(day.weight)extras.push(`${day.weight} lbs`);if(day.water_oz)extras.push(`${day.water_oz} oz water`);
+    return `<div class="rep-day"><div class="dh"><span>${fmtDate(d)}</span>${extras.length?`<span>${extras.join(" · ")}</span>`:""}</div>
+      <div class="avg">
+        <div><div class="n">${Math.round(t.cal)}</div><div class="k">calories</div></div>
+        <div><div class="n">${Math.round(t.pro)}</div><div class="k">protein</div></div>
+        <div><div class="n">${Math.round(t.carb)}</div><div class="k">carbs</div></div>
+        <div><div class="n">${Math.round(t.fat)}</div><div class="k">fat</div></div>
+        <div><div class="n">${Math.round(t.fib)}</div><div class="k">fiber</div></div>
+      </div>
+      ${catHtml}${woRows}</div>`;
   }).join("");
-  const avg=k=>logged?Math.round(sums[k]/logged):0;
   const trainIn=Store.listWorkouts().filter(w=>w.date>=dates[0]&&w.date<=end);
   const trainCount=trainIn.length;
   const trainVol=trainIn.reduce((a,w)=>a+volumeOf(w),0);
@@ -1015,14 +1028,7 @@ function buildReport(days){
   const shotHtml=shotsIn.length?`<div class="rep-day"><div class="dh"><span>Injections</span></div>${shotsIn.map(x=>`<div class="rep-meal"><span>${x}</span></div>`).join("")}</div>`:"";
   $("rep-doc").innerHTML=`
     <h2>Cycle — Nutrition Report</h2>
-    <div class="sub">${fmtDate(dates[0])} – ${fmtDate(end)} · ${days} days · averages over ${logged} logged day${logged===1?"":"s"}</div>
-    <div class="avg">
-      <div><div class="n">${avg("cal")}</div><div class="k">kcal</div></div>
-      <div><div class="n">${avg("pro")}</div><div class="k">protein</div></div>
-      <div><div class="n">${avg("carb")}</div><div class="k">carbs</div></div>
-      <div><div class="n">${avg("fat")}</div><div class="k">fat</div></div>
-      <div><div class="n">${avg("fib")}</div><div class="k">fiber</div></div>
-    </div>
+    <div class="sub">${fmtDate(dates[0])} – ${fmtDate(end)} · ${days} days</div>
     <div class="sub" style="margin-bottom:4px">Daily goals: ${goals.cal} kcal · ${goals.pro}p · ${goals.carb}c · ${goals.fat}f · ${goals.fib}fib</div>
     <div class="sub" style="margin-bottom:4px">Training: ${trainCount} session${trainCount===1?"":"s"} over ${days} days${trainVol?` · ${Math.round(trainVol).toLocaleString()} lbs total volume`:""}${trainMin?` · ${trainMin} active minutes`:""}</div>
     ${shotHtml}${dayHtml}`;
