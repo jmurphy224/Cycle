@@ -63,7 +63,13 @@ export default async function handler(req, res) {
       pageSize: "5",
       dataType: "Branded,Foundation,SR Legacy",
     });
-    const r = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?${params}`);
+    const r = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?${params}`, {
+      headers: {
+        "User-Agent": "Cycle-MurphTracker/1.0 (+personal nutrition tracker)",
+        Accept: "application/json",
+        "X-Api-Key": KEY,
+      },
+    });
     const raw = await r.text();
     let data;
     try {
