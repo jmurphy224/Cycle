@@ -47,12 +47,11 @@ function gramsForQuantity(food, leadingNum, unitWord, isServing) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// USDA's gateway occasionally blips with a non-JSON block page (shared Vercel
-// outbound IPs hitting a WAF) — a couple of quick retries usually clears it.
-async function searchFdc(url, headers, attempts = 3) {
+// Retry a couple of times before giving up on a transient upstream blip.
+async function searchFdc(url, attempts = 3) {
   let last = null;
   for (let i = 0; i < attempts; i++) {
-    const r = await fetch(url, { headers });
+    const r = await fetch(url);
     const raw = await r.text();
     let data;
     try {
@@ -84,43 +83,22 @@ export default async function handler(req, res) {
   if (!q) return res.status(400).json({ error: "Missing q" });
 
   try {
-    const params = new URLSearchParams({
-      api_key: KEY,
-      query: q,
-      pageSize: "5",
-      dataType: "Branded,Foundation,SR Legacy",
-    });
-    const result = await searchFdc(`https://api.nal.usda.gov/fdc/v1/foods/search?${params}`, {
-      "User-Agent": "Cycle-MurphTracker/1.0 (+personal nutrition tracker)",
-      Accept: "application/json",
-      "X-Api-Key": KEY,
-    });
+    const params = new URLSearchParams({ api_key: KEY, query: q });
+    const result = await searchFdc(`https://api.nal.usda.gov/fdc/v1/foods/search?${params}`);
     if (result?.transient) {
       return res.status(502).json({ error: "USDA returned a non-JSON response after retries", status: result.status, body: result.body });
     }
     const { ok, status, data } = result;
     if (!ok) return res.status(status).json({ error: data?.message || data?.error?.message || "USDA search failed", detail: data });
-    const food = (data.foods || [])[0];
+    // The top-scored hit is often a generic entry (e.g. "Cheese, cottage, low
+    // fat") even when a branded match exists further down — prefer the brand.
+    const foods = data.foods || [];
+    const food = foods.find((f) => f.dataType === "Branded") || foods[0];
     if (!food) return res.status(404).json({ error: "No match found" });
 
     const leadingNum = parseFloat((qty.match(/[\d.]+/) || ["1"])[0]) || 1;
     const isServing = /serving/i.test(qty);
     const unitWord = qty.replace(/^[\d.]+\s*/, "").trim().toLowerCase().replace(/s$/, "");
-
-    // Prefer the label's own per-serving numbers — exactly what's printed on the box.
-    if (isServing && food.labelNutrients) {
-      const ln = food.labelNutrients;
-      return res.status(200).json({
-        description: food.description,
-        brand: food.brandOwner || null,
-        grams: food.servingSize ? Math.round(food.servingSize * leadingNum) : null,
-        calories: Math.round((ln.calories?.value || 0) * leadingNum),
-        protein: Math.round((ln.protein?.value || 0) * leadingNum),
-        carbs: Math.round((ln.carbohydrates?.value || 0) * leadingNum),
-        fat: Math.round((ln.fat?.value || 0) * leadingNum),
-        fiber: Math.round((ln.fiber?.value || 0) * leadingNum),
-      });
-    }
 
     const per100 = {};
     for (const n of food.foodNutrients || []) {
