@@ -427,6 +427,13 @@
       </div>
     </div>
     <div class="card">
+      <h3>Weight trend</h3>
+      <div class="volrow"><span class="big num" id="wt-now">–</span><span class="u">lbs</span></div>
+      <div class="muted" style="font-size:12.5px;margin-top:2px" id="wt-change"></div>
+      <div id="wt-chart" style="margin-top:12px"></div>
+      <div class="sparkx" id="wt-x"></div>
+    </div>
+    <div class="card">
       <h3>Daily goals</h3>
       <div class="grid5">
         <div><label class="fld" style="text-align:center">kcal</label><input id="g-cal" inputmode="numeric" /></div>
@@ -543,6 +550,7 @@ const Store = (() => {
   const listWorkouts=d=>{const a=read(LS.workouts,[]);return d?a.filter(w=>w.date===d):a};
 
   const getDay=d=>read(LS.daily,{})[d]||{date:d,water_oz:0,weight:null};
+  const listDaily=()=>Object.values(read(LS.daily,{})).sort((a,b)=>a.date<b.date?-1:1);
   async function setDay(d,patch){
     const days=read(LS.daily,{});const next={...(days[d]||{date:d,water_oz:0,weight:null}),...patch};
     days[d]=next;write(LS.daily,days);
@@ -567,7 +575,7 @@ const Store = (() => {
     }catch(e){console.warn("workouts not syncing yet:",e.message||e);}
     await flush();
   }
-  return {addFood,deleteFood,listFood,addShot,listShots,addWorkout,deleteWorkout,listWorkouts,getDay,setDay,getSettings,setSettings,sync};
+  return {addFood,deleteFood,listFood,addShot,listShots,addWorkout,deleteWorkout,listWorkouts,getDay,setDay,listDaily,getSettings,setSettings,sync};
 })();
 
 /* =========================================================================
@@ -646,6 +654,7 @@ function renderToday(){
   $("water-amt").textContent=Store.getDay(viewDate).water_oz;
   renderMoveToday();
   renderDial();
+  renderWeightChart();
 }
 function renderDial(){
   const shots=Store.listShots();
@@ -986,6 +995,35 @@ async function saveWeight(){
   await Store.setDay(viewDate,{weight:w});$("weight-in").value="";renderToday();toast("Weight saved ✓");
 }
 
+const weightEntries=(from,to)=>Store.listDaily().filter(d=>d.weight!=null&&d.weight!==""&&(!from||d.date>=from)&&(!to||d.date<=to));
+function weightChartSvg(entries,h){
+  h=h||110;const w=600,pad=10;
+  const vals=entries.map(e=>+e.weight);
+  const min=Math.min(...vals),max=Math.max(...vals),span=max-min||1;
+  const x=i=>pad+(i/(entries.length-1))*(w-pad*2);
+  const y=v=>h-pad-((v-min)/span)*(h-pad*2);
+  const pts=entries.map((e,i)=>`${x(i).toFixed(1)},${y(+e.weight).toFixed(1)}`).join(" ");
+  const dots=entries.map((e,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(+e.weight).toFixed(1)}" r="2.6" fill="#7c83ff"/>`).join("");
+  return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" style="width:100%;height:${h}px;display:block">
+    <polyline points="${pts}" fill="none" stroke="#7c83ff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots}
+  </svg>`;
+}
+function renderWeightChart(){
+  const el=$("wt-chart");if(!el)return;
+  const xEl=$("wt-x"),nowEl=$("wt-now"),chEl=$("wt-change");
+  const entries=weightEntries();
+  nowEl.textContent=entries.length?entries[entries.length-1].weight:"–";
+  chEl.textContent=entries.length>1?`${(entries[entries.length-1].weight-entries[0].weight>0?"+":"")}${(entries[entries.length-1].weight-entries[0].weight).toFixed(1)} lbs since ${fmtDate(entries[0].date)}`:"";
+  if(entries.length<2){
+    el.innerHTML=`<div class="empty" style="padding:16px 0">Log your weight on a couple of days to see a trend</div>`;
+    xEl.innerHTML="";
+    return;
+  }
+  el.innerHTML=weightChartSvg(entries);
+  xEl.innerHTML=`<span>${fmtDate(entries[0].date)}</span><span></span><span>${fmtDate(entries[entries.length-1].date)}</span>`;
+}
+
 /* ---- REPORT ---- */
 const REPORT_MEALS=["Breakfast","Lunch","Dinner","Snack"];
 function buildReport(days){
@@ -1026,12 +1064,14 @@ function buildReport(days){
   const shotsIn=Store.listShots().filter(s=>s.date>=dates[0]&&s.date<=end)
     .map(s=>`${fmtDate(s.date)} — ${s.dose}mg, ${esc(s.site||"")}${s.sideEffects?.length?` (${s.sideEffects.map(esc).join(", ")})`:""}`);
   const shotHtml=shotsIn.length?`<div class="rep-day"><div class="dh"><span>Injections</span></div>${shotsIn.map(x=>`<div class="rep-meal"><span>${x}</span></div>`).join("")}</div>`:"";
+  const weightIn=weightEntries(dates[0],end);
+  const weightHtml=weightIn.length?`<div class="rep-day"><div class="dh"><span>Weight</span><span>${weightIn.length>1?`${weightIn[0].weight} → ${weightIn[weightIn.length-1].weight} lbs`:`${weightIn[0].weight} lbs`}</span></div>${weightIn.length>1?`<div style="margin:10px 0 4px">${weightChartSvg(weightIn,90)}</div><div class="sub" style="margin-bottom:0">${fmtDate(weightIn[0].date)} – ${fmtDate(weightIn[weightIn.length-1].date)}</div>`:""}</div>`:"";
   $("rep-doc").innerHTML=`
     <h2>Cycle — Nutrition Report</h2>
     <div class="sub">${fmtDate(dates[0])} – ${fmtDate(end)} · ${days} days</div>
     <div class="sub" style="margin-bottom:4px">Daily goals: ${goals.cal} kcal · ${goals.pro}p · ${goals.carb}c · ${goals.fat}f · ${goals.fib}fib</div>
     <div class="sub" style="margin-bottom:4px">Training: ${trainCount} session${trainCount===1?"":"s"} over ${days} days${trainVol?` · ${Math.round(trainVol).toLocaleString()} lbs total volume`:""}${trainMin?` · ${trainMin} active minutes`:""}</div>
-    ${shotHtml}${dayHtml}`;
+    ${weightHtml}${shotHtml}${dayHtml}`;
   $("report-ov").classList.add("on");
   document.body.style.overflow="hidden";
 }
