@@ -1181,9 +1181,12 @@ const REPORT_MEALS=["Breakfast","Lunch","Dinner","Snack"];
 function buildReport(days){
   const end=today();
   const dates=[];for(let i=days-1;i>=0;i--)dates.push(addDays(end,-i));
-  const dayHtml=dates.map(d=>{
+  const dayTotals=dates.map(totalsFor);
+  const avgCal=dayTotals.reduce((a,t)=>a+t.cal,0)/days;
+  const calDiff=avgCal-goals.cal;
+  const dayHtml=dates.map((d,i)=>{
     const meals=Store.listFood(d);
-    const t=totalsFor(d);
+    const t=dayTotals[i];
     const day=Store.getDay(d);
     const byMeal={};REPORT_MEALS.forEach(c=>byMeal[c]=[]);
     meals.forEach(m=>(byMeal[REPORT_MEALS.includes(m.meal)?m.meal:"Snack"]).push(m));
@@ -1222,6 +1225,7 @@ function buildReport(days){
     <h2>Cycle — Nutrition Report</h2>
     <div class="sub">${fmtDate(dates[0])} – ${fmtDate(end)} · ${days} days</div>
     <div class="sub" style="margin-bottom:4px">Daily goals: ${goals.cal} kcal · ${goals.pro}p · ${goals.carb}c · ${goals.fat}f · ${goals.fib}fib</div>
+    <div class="sub" style="margin-bottom:4px">Calories: averaged ${Math.round(avgCal)}/day, ${Math.abs(Math.round(calDiff))} kcal ${calDiff>=0?"over":"under"} your ${goals.cal} goal</div>
     <div class="sub" style="margin-bottom:4px">Training: ${trainCount} session${trainCount===1?"":"s"} over ${days} days${trainVol?` · ${Math.round(trainVol).toLocaleString()} lbs total volume`:""}${trainMin?` · ${trainMin} active minutes`:""}</div>
     ${weightHtml}${shotHtml}${dayHtml}`;
   $("report-ov").classList.add("on");
