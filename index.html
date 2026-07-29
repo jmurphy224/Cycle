@@ -774,9 +774,9 @@ function renderScanResult(){
       <div class="kc">${Math.round(d.calories*n)}</div>
     </div>
     <div class="row" style="align-items:center;margin-top:8px">
-      <button class="btn sm ghost" style="flex:0 0 auto;padding:11px 16px" onclick="adjustScanServings(-1)">−</button>
+      <button class="btn sm ghost" style="flex:0 0 auto;width:auto;padding:11px 16px" onclick="adjustScanServings(-1)">−</button>
       <div style="flex:1;text-align:center">${n} serving${n===1?"":"s"}</div>
-      <button class="btn sm ghost" style="flex:0 0 auto;padding:11px 16px" onclick="adjustScanServings(1)">+</button>
+      <button class="btn sm ghost" style="flex:0 0 auto;width:auto;padding:11px 16px" onclick="adjustScanServings(1)">+</button>
     </div>
     <div style="height:10px"></div>
     <button class="btn sm" onclick="logScanResult()">Log it</button>`;
