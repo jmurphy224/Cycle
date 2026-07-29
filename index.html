@@ -323,6 +323,20 @@
     </div>
 
     <div class="card">
+      <h3>Snap a photo</h3>
+      <input id="photo-input" type="file" accept="image/*" capture="environment" onchange="previewPhoto()" />
+      <div style="height:10px"></div>
+      <img id="photo-preview" style="display:none;width:100%;border-radius:12px;max-height:260px;object-fit:cover" />
+      <div style="height:10px"></div>
+      <label class="fld">How'd you cook it? (optional, but it changes the estimate a lot)</label>
+      <input id="photo-method" placeholder="e.g. pan-fried in butter, grilled, air fried, steamed" />
+      <div style="height:12px"></div>
+      <button class="btn sm" onclick="photoEstimate()">Estimate & log</button>
+      <div class="ai-status" id="photo-status"></div>
+      <div id="photo-result"></div>
+    </div>
+
+    <div class="card">
       <h3>Add manually</h3>
       <label class="fld">What did you eat</label>
       <input id="f-desc" placeholder="e.g. Grilled chicken bowl" />
@@ -504,6 +518,7 @@
   </div>
 </div>
 
+<script src="/vendor/zxing.min.js"></script>
 <script>
 /* =========================================================================
    STORAGE — Supabase via /api/store, mirrored in localStorage for instant UI.
@@ -722,33 +737,31 @@ async function saveManual(){
 }
 
 /* ---- Barcode scan ---- */
-let scanStream=null,scanDetector=null,scanRAF=null,lastScanResult=null,lastScanServings=1;
+let zxingReader=null,scanActive=false,lastScanResult=null,lastScanServings=1;
 async function startBarcodeScan(){
   const wrap=$("scan-video-wrap"),video=$("scan-video"),status=$("scan-status");
-  if(!("BarcodeDetector" in window)){status.textContent="Camera scanning isn't supported in this browser — type the number below instead.";return;}
+  if(!("ZXing" in window)){status.textContent="Barcode scanner failed to load — type the number below instead.";return;}
+  if(!navigator.mediaDevices?.getUserMedia){status.textContent="Camera scanning isn't supported in this browser — type the number below instead.";return;}
   try{
-    scanDetector=new BarcodeDetector({formats:["upc_a","upc_e","ean_13","ean_8"]});
-    scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
-    video.srcObject=scanStream;
+    const hints=new Map();
+    hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.UPC_A,ZXing.BarcodeFormat.UPC_E,ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8]);
+    zxingReader=new ZXing.BrowserMultiFormatReader(hints);
     wrap.style.display="block";
     status.textContent="Point the camera at the barcode…";
-    scanLoop();
-  }catch(e){status.textContent="Couldn't access the camera — type the number below instead.";}
+    scanActive=true;
+    await zxingReader.decodeFromConstraints({video:{facingMode:"environment"}},video,(result)=>{
+      if(!scanActive||!result)return;
+      const v=result.getText();
+      stopBarcodeScan();
+      runBarcodeLookup(v);
+    });
+  }catch(e){status.textContent="Couldn't access the camera — type the number below instead.";stopBarcodeScan();}
 }
 function stopBarcodeScan(){
-  if(scanRAF)cancelAnimationFrame(scanRAF);
-  scanRAF=null;
-  if(scanStream)scanStream.getTracks().forEach(t=>t.stop());
-  scanStream=null;
+  scanActive=false;
+  if(zxingReader){try{zxingReader.reset()}catch(e){}}
+  zxingReader=null;
   $("scan-video-wrap").style.display="none";
-}
-async function scanLoop(){
-  if(!scanStream)return;
-  try{
-    const codes=await scanDetector.detect($("scan-video"));
-    if(codes.length){const v=codes[0].rawValue;stopBarcodeScan();await runBarcodeLookup(v);return;}
-  }catch(e){}
-  scanRAF=requestAnimationFrame(scanLoop);
 }
 async function lookupBarcodeManual(){
   const v=$("scan-manual").value.trim();
@@ -835,6 +848,55 @@ async function aiParse(){
     $("ai-input").value="";s.textContent="";renderFood();renderToday();
     toast((items.length>1?items.length+" items · ":"")+"Logged "+Math.round(total)+" kcal"+(verified?` (${verified} verified) ✓`:" ✓"));
   }catch(e){s.textContent=e.message||"Couldn't parse that — try the manual form.";}
+}
+
+/* ---- Photo estimate ---- */
+function previewPhoto(){
+  const f=$("photo-input").files[0],img=$("photo-preview");
+  if(!f){img.style.display="none";return;}
+  img.src=URL.createObjectURL(f);img.style.display="block";
+}
+function fileToBase64(file){
+  return new Promise((resolve,reject)=>{
+    const r=new FileReader();
+    r.onload=()=>resolve(r.result.split(",")[1]);
+    r.onerror=reject;
+    r.readAsDataURL(file);
+  });
+}
+async function photoEstimate(){
+  const file=$("photo-input").files[0];
+  if(!file)return toast("Take or choose a photo first");
+  const method=$("photo-method").value.trim();
+  const s=$("photo-status");s.textContent="Looking at your plate…";$("photo-result").innerHTML="";
+  try{
+    const b64=await fileToBase64(file);
+    const sys=`You estimate calories and macros from a photo of a meal for a GLP-1 user tracking food. Identify each distinct food on the plate and estimate its portion size using visual cues (plate/bowl size, utensils, hand if visible). ${method?`The user says they cooked it this way: "${method}" — factor that into fat/calories (frying and butter/oil add significant calories vs. grilling/steaming/baking).`:"No cooking method was given — assume a typical preparation and lean toward the higher end of your calorie range, since photo-based portion estimates run low more often than high."} Reply with ONLY a JSON array, no prose, no markdown fences: [{"description":"short name with your estimated portion, e.g. '6oz grilled chicken breast'","query":"clean generic food name for a nutrition database lookup","qty":"your portion estimate in a database-friendly form, e.g. '6 oz' or '1 cup'","meal":"Breakfast|Lunch|Dinner|Snack","calories":int,"protein":int,"carbs":int,"fat":int,"fiber":int,"confidence":"low|medium|high"}, ...]. Portion size from a photo is inherently a rough estimate, not a measurement — say so honestly via the confidence field rather than pretending precision.`;
+    const raw=await callAI(sys,[
+      {type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:b64}},
+      {type:"text",text:"Estimate the food in this photo."+(method?` Cooking method: ${method}.`:"")}
+    ]);
+    const parsed=JSON.parse(raw.replace(/```json|```/g,"").trim());
+    const items=Array.isArray(parsed)?parsed:[parsed];
+    let total=0,verified=0,lowConf=0;
+    for(const j of items){
+      let entry={date:viewDate,meal:j.meal||selectedMeal(),description:j.description||"Meal from photo",source:"Photo estimate",
+        calories:+j.calories||0,protein:+j.protein||0,carbs:+j.carbs||0,fat:+j.fat||0,fiber:+j.fiber||0};
+      const nd=await lookupNutrition(j.query||j.description||"food",j.qty||"1 serving");
+      if(nd){
+        entry={...entry,calories:nd.calories,protein:nd.protein,carbs:nd.carbs,fat:nd.fat,fiber:nd.fiber,
+          description:entry.description+(nd.grams?` (${nd.grams}g)`:""),
+          source:"USDA"+(nd.brand?" · "+nd.brand:"")};
+        verified++;
+      }
+      if((j.confidence||"").toLowerCase()==="low")lowConf++;
+      await Store.addFood(entry);
+      total+=entry.calories;
+    }
+    $("photo-input").value="";$("photo-preview").style.display="none";$("photo-method").value="";s.textContent="";
+    renderFood();renderToday();
+    toast((items.length>1?items.length+" items · ":"")+"Logged "+Math.round(total)+" kcal"+(verified?` (${verified} verified)`:"")+(lowConf?" — check the estimate, portion was uncertain":" ✓"));
+  }catch(e){s.textContent=e.message||"Couldn't read that photo — try again or log manually.";}
 }
 async function aiAsk(){
   const q=$("ai-input").value.trim();if(!q)return;
