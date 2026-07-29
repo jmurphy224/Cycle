@@ -61,6 +61,18 @@
   .rep-doc .avg div{background:#f2f4f7;border-radius:9px;padding:10px 6px;text-align:center}
   .rep-doc .avg .n{font-family:var(--disp);font-weight:700;font-size:18px}
   .rep-doc .avg .k{font-size:10px;color:#5a6472;text-transform:uppercase;letter-spacing:0.05em}
+  .rep-doc .goalbars{margin:14px 0 20px;display:grid;gap:9px}
+  .rep-doc .gb-row{display:grid;grid-template-columns:60px 1fr auto;gap:10px;align-items:center}
+  .rep-doc .gb-row .gb-lbl{font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#5a6472}
+  .rep-doc .gb-row .gb-track{height:7px;background:#eef1f5;border-radius:5px;overflow:hidden}
+  .rep-doc .gb-row .gb-track>i{display:block;height:100%;border-radius:5px}
+  .rep-doc .gb-row .gb-val{font-size:12px;color:#5a6472;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .rep-doc .gb-cal>i{background:linear-gradient(90deg,var(--accent-dim),var(--accent))}
+  .rep-doc .gb-cal.over>i{background:linear-gradient(90deg,#b45c4a,var(--danger))}
+  .rep-doc .gb-protein>i{background:var(--protein)}
+  .rep-doc .gb-carbs>i{background:var(--carbs)}
+  .rep-doc .gb-fat>i{background:var(--fat)}
+  .rep-doc .gb-fiber>i{background:var(--fiber)}
   .rep-day{border-top:1px solid #e4e8ee;padding:12px 0}
   .rep-day .dh{display:flex;justify-content:space-between;font-family:var(--disp);font-weight:600;font-size:14px;margin-bottom:8px}
   .rep-day .dh span{color:#5a6472;font-weight:500}
@@ -1182,8 +1194,20 @@ function buildReport(days){
   const end=today();
   const dates=[];for(let i=days-1;i>=0;i--)dates.push(addDays(end,-i));
   const dayTotals=dates.map(totalsFor);
-  const avgCal=dayTotals.reduce((a,t)=>a+t.cal,0)/days;
+  const avg=k=>dayTotals.reduce((a,t)=>a+t[k],0)/days;
+  const avgCal=avg("cal"),avgPro=avg("pro"),avgCarb=avg("carb"),avgFat=avg("fat"),avgFib=avg("fib");
   const calDiff=avgCal-goals.cal;
+  const gbRow=(cls,label,val,goal,unit)=>{
+    const pct=goal?Math.min(100,Math.round(val/goal*100)):0;
+    return `<div class="gb-row"><span class="gb-lbl">${label}</span><div class="gb-track ${cls}${cls==="gb-cal"&&val>goal?" over":""}"><i style="width:${pct}%"></i></div><span class="gb-val">${Math.round(val)} / ${goal}${unit}</span></div>`;
+  };
+  const goalBarsHtml=`<div class="goalbars">
+    ${gbRow("gb-cal","Cal",avgCal,goals.cal," kcal")}
+    ${gbRow("gb-protein","Protein",avgPro,goals.pro,"g")}
+    ${gbRow("gb-carbs","Carbs",avgCarb,goals.carb,"g")}
+    ${gbRow("gb-fat","Fat",avgFat,goals.fat,"g")}
+    ${gbRow("gb-fiber","Fiber",avgFib,goals.fib,"g")}
+  </div>`;
   const dayHtml=dates.map((d,i)=>{
     const meals=Store.listFood(d);
     const t=dayTotals[i];
@@ -1226,6 +1250,7 @@ function buildReport(days){
     <div class="sub">${fmtDate(dates[0])} – ${fmtDate(end)} · ${days} days</div>
     <div class="sub" style="margin-bottom:4px">Daily goals: ${goals.cal} kcal · ${goals.pro}p · ${goals.carb}c · ${goals.fat}f · ${goals.fib}fib</div>
     <div class="sub" style="margin-bottom:4px">Calories: averaged ${Math.round(avgCal)}/day, ${Math.abs(Math.round(calDiff))} kcal ${calDiff>=0?"over":"under"} your ${goals.cal} goal</div>
+    ${goalBarsHtml}
     <div class="sub" style="margin-bottom:4px">Training: ${trainCount} session${trainCount===1?"":"s"} over ${days} days${trainVol?` · ${Math.round(trainVol).toLocaleString()} lbs total volume`:""}${trainMin?` · ${trainMin} active minutes`:""}</div>
     ${weightHtml}${shotHtml}${dayHtml}`;
   $("report-ov").classList.add("on");
