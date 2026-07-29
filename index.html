@@ -306,6 +306,23 @@
     </div>
 
     <div class="card">
+      <h3>Scan a barcode</h3>
+      <button class="btn sm" id="scan-btn" onclick="startBarcodeScan()">📷 Scan with camera</button>
+      <div id="scan-video-wrap" style="display:none;margin-top:10px">
+        <video id="scan-video" autoplay playsinline muted style="width:100%;border-radius:12px;background:#000"></video>
+        <div style="height:8px"></div>
+        <button class="btn sm ghost" onclick="stopBarcodeScan()">Cancel</button>
+      </div>
+      <div style="height:12px"></div>
+      <label class="fld">Or type the barcode number</label>
+      <input id="scan-manual" inputmode="numeric" placeholder="e.g. 049000028911" />
+      <div style="height:10px"></div>
+      <button class="btn sm ghost" onclick="lookupBarcodeManual()">Look up</button>
+      <div class="ai-status" id="scan-status"></div>
+      <div id="scan-result"></div>
+    </div>
+
+    <div class="card">
       <h3>Add manually</h3>
       <label class="fld">What did you eat</label>
       <input id="f-desc" placeholder="e.g. Grilled chicken bowl" />
@@ -701,6 +718,79 @@ async function saveManual(){
     calories:+$("f-cal").value||0,protein:+$("f-pro").value||0,carbs:+$("f-carb").value||0,fat:+$("f-fat").value||0,fiber:+$("f-fib").value||0};
   await Store.addFood(e);
   ["f-desc","f-cal","f-pro","f-carb","f-fat","f-fib"].forEach(i=>$(i).value="");
+  renderFood();renderToday();toast("Logged ✓");
+}
+
+/* ---- Barcode scan ---- */
+let scanStream=null,scanDetector=null,scanRAF=null,lastScanResult=null,lastScanServings=1;
+async function startBarcodeScan(){
+  const wrap=$("scan-video-wrap"),video=$("scan-video"),status=$("scan-status");
+  if(!("BarcodeDetector" in window)){status.textContent="Camera scanning isn't supported in this browser — type the number below instead.";return;}
+  try{
+    scanDetector=new BarcodeDetector({formats:["upc_a","upc_e","ean_13","ean_8"]});
+    scanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+    video.srcObject=scanStream;
+    wrap.style.display="block";
+    status.textContent="Point the camera at the barcode…";
+    scanLoop();
+  }catch(e){status.textContent="Couldn't access the camera — type the number below instead.";}
+}
+function stopBarcodeScan(){
+  if(scanRAF)cancelAnimationFrame(scanRAF);
+  scanRAF=null;
+  if(scanStream)scanStream.getTracks().forEach(t=>t.stop());
+  scanStream=null;
+  $("scan-video-wrap").style.display="none";
+}
+async function scanLoop(){
+  if(!scanStream)return;
+  try{
+    const codes=await scanDetector.detect($("scan-video"));
+    if(codes.length){const v=codes[0].rawValue;stopBarcodeScan();await runBarcodeLookup(v);return;}
+  }catch(e){}
+  scanRAF=requestAnimationFrame(scanLoop);
+}
+async function lookupBarcodeManual(){
+  const v=$("scan-manual").value.trim();
+  if(!v)return toast("Enter a barcode number");
+  await runBarcodeLookup(v);
+}
+async function runBarcodeLookup(code){
+  const status=$("scan-status");status.textContent="Looking up "+code+"…";$("scan-result").innerHTML="";
+  try{
+    const r=await fetch(`/api/barcode?code=${encodeURIComponent(code)}`);
+    const data=await r.json();
+    if(!r.ok){status.textContent=data.error||"No match found — log it manually below.";return;}
+    status.textContent="";lastScanResult=data;lastScanServings=1;
+    renderScanResult();
+  }catch(e){status.textContent="Lookup failed — log it manually below.";}
+}
+function renderScanResult(){
+  const d=lastScanResult,n=lastScanServings;
+  $("scan-result").innerHTML=`
+    <div class="entry">
+      <div class="meta"><div class="t">${esc(d.description)}${d.brand?" · "+esc(d.brand):""}</div>
+      <div class="s">${d.servingText?esc(d.servingText)+" · ":""}${esc(d.source)}</div></div>
+      <div class="kc">${Math.round(d.calories*n)}</div>
+    </div>
+    <div class="row" style="align-items:center;margin-top:8px">
+      <button class="btn sm ghost" style="flex:0 0 auto;padding:11px 16px" onclick="adjustScanServings(-1)">−</button>
+      <div style="flex:1;text-align:center">${n} serving${n===1?"":"s"}</div>
+      <button class="btn sm ghost" style="flex:0 0 auto;padding:11px 16px" onclick="adjustScanServings(1)">+</button>
+    </div>
+    <div style="height:10px"></div>
+    <button class="btn sm" onclick="logScanResult()">Log it</button>`;
+}
+function adjustScanServings(delta){
+  lastScanServings=Math.max(0.5,+(lastScanServings+delta*0.5).toFixed(1));
+  renderScanResult();
+}
+async function logScanResult(){
+  const d=lastScanResult,n=lastScanServings;
+  const e={date:viewDate,meal:selectedMeal(),description:d.description+(n!==1?` (x${n})`:""),source:d.source+(d.brand?" · "+d.brand:""),
+    calories:Math.round(d.calories*n),protein:Math.round(d.protein*n),carbs:Math.round(d.carbs*n),fat:Math.round(d.fat*n),fiber:Math.round(d.fiber*n)};
+  await Store.addFood(e);
+  lastScanResult=null;$("scan-result").innerHTML="";$("scan-manual").value="";
   renderFood();renderToday();toast("Logged ✓");
 }
 
