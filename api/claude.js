@@ -5,7 +5,7 @@
 // Env var to set in Vercel (Project -> Settings -> Environment Variables):
 //   ANTHROPIC_API_KEY  -> your key from console.anthropic.com (starts "sk-ant-")
 //
-// This is OPTIONAL. Cycle works as a full tracker without it (manual entry).
+// This is OPTIONAL. GLP1 works as a full tracker without it (manual entry).
 // Set it up when you want the "describe your meal and it fills in the macros"
 // and "what should I eat here" features.
 

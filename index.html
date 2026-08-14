@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
-<title>Weight Loss Journey</title>
+<title>GLP1</title>
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Weight Loss Journey" />
+<meta name="apple-mobile-web-app-title" content="GLP1" />
 <meta name="theme-color" content="#0d1014" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -247,7 +247,7 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="logo">Weight Loss <b>Journey</b></div>
+    <div class="logo">GLP<b>1</b></div>
     <div class="datenav">
       <button class="arrow" onclick="stepDay(-1)">‹</button>
       <div class="dpick">
@@ -307,7 +307,7 @@
   <!-- ===== FOOD ===== -->
   <section class="tab" id="tab-food">
     <div class="card ai">
-      <h3>Ask MurphTracker</h3>
+      <h3>Ask GLP1</h3>
       <textarea id="ai-input" placeholder="Describe a meal — “Greek Belly rice bowl, no pita” — or ask “what should I eat at Qdoba?”"></textarea>
       <div style="height:20px"></div>
       <div class="row">
@@ -727,7 +727,7 @@ function selectedMeal(){return document.querySelector("#f-meal button.on")?.data
 function renderFood(){
   const list=Store.listFood(viewDate);
   const el=$("food-list");
-  if(!list.length){el.innerHTML=`<div class="empty"><b>Nothing logged yet</b>Use Ask Cycle or add a meal below.</div>`;return;}
+  if(!list.length){el.innerHTML=`<div class="empty"><b>Nothing logged yet</b>Use Ask GLP1 or add a meal below.</div>`;return;}
   el.innerHTML=list.map(f=>`
     <div class="entry">
       <div class="meta"><div class="t">${esc(f.description||"Meal")}</div>
@@ -1246,7 +1246,7 @@ function buildReport(days){
   const weightIn=weightEntries(dates[0],end);
   const weightHtml=weightIn.length?`<div class="rep-day"><div class="dh"><span>Weight</span><span>${weightIn.length>1?`${weightIn[0].weight} → ${weightIn[weightIn.length-1].weight} lbs`:`${weightIn[0].weight} lbs`}</span></div>${weightIn.length>1?`<div style="margin:10px 0 4px">${weightChartSvg(weightIn,90)}</div><div class="sub" style="margin-bottom:0">${fmtDate(weightIn[0].date)} – ${fmtDate(weightIn[weightIn.length-1].date)}</div>`:""}</div>`:"";
   $("rep-doc").innerHTML=`
-    <h2>Cycle — Nutrition Report</h2>
+    <h2>GLP1 — Nutrition Report</h2>
     <div class="sub">${fmtDate(dates[0])} – ${fmtDate(end)} · ${days} days</div>
     <div class="sub" style="margin-bottom:4px">Daily goals: ${goals.cal} kcal · ${goals.pro}p · ${goals.carb}c · ${goals.fat}f · ${goals.fib}fib</div>
     <div class="sub" style="margin-bottom:4px">Calories: averaged ${Math.round(avgCal)}/day, ${Math.abs(Math.round(calDiff))} kcal ${calDiff>=0?"over":"under"} your ${goals.cal} goal</div>
