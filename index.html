@@ -399,6 +399,19 @@
     </div>
 
     <div class="card">
+      <h3>Quick log · Apple Fitness+</h3>
+      <label class="fld">Workout type</label>
+      <div class="opts" id="fp-type"></div>
+      <div style="height:12px"></div>
+      <div class="row">
+        <div><label class="fld">Minutes</label><input id="fp-dur" inputmode="numeric" /></div>
+        <div><label class="fld">Calories burned</label><input id="fp-cal" inputmode="numeric" /></div>
+      </div>
+      <div style="height:12px"></div>
+      <button class="btn" onclick="logFitnessPlus()">Log it</button>
+    </div>
+
+    <div class="card">
       <h3>Log a session</h3>
       <div class="seg" id="w-mod">
         <button data-m="strength" class="on">Strength</button>
@@ -927,9 +940,12 @@ const TIMES=[15,30,45,60];
 const PLACES=["Home","Gym","Hotel","Bodyweight"];
 let planPick={time:30,place:"Home",energy:3};
 let woDraft={exercises:[]};
+const FP_TYPES=["HIIT","Strength","Yoga","Cycling","Dance","Core","Treadmill","Cooldown"];
+const FP_MOD={HIIT:"cardio",Strength:"strength",Yoga:"mobility",Cycling:"cardio",Dance:"cardio",Core:"strength",Treadmill:"cardio",Cooldown:"mobility"};
+let fpPick={type:"HIIT"};
 let lastPlan=null;
 
-function renderMove(){renderMoveOpts();renderEx();renderWorkoutList();renderVolume();}
+function renderMove(){renderMoveOpts();renderFPTypes();renderEx();renderWorkoutList();renderVolume();}
 
 function renderMoveOpts(){
   $("mv-time").innerHTML=TIMES.map(t=>`<div class="opt ${t===planPick.time?"sel":""}" onclick="pickTime(${t})">${t} min</div>`).join("");
@@ -939,6 +955,21 @@ function renderMoveOpts(){
 function pickTime(t){planPick.time=t;renderMoveOpts();}
 function pickPlace(p){planPick.place=p;renderMoveOpts();}
 function pickEnergy(n){planPick.energy=n;renderMoveOpts();}
+
+function renderFPTypes(){
+  $("fp-type").innerHTML=FP_TYPES.map(t=>`<div class="opt ${t===fpPick.type?"sel":""}" onclick="pickFPType('${t}')">${t}</div>`).join("");
+}
+function pickFPType(t){fpPick.type=t;renderFPTypes();}
+async function logFitnessPlus(){
+  const dur=+$("fp-dur").value||null;
+  const cal=+$("fp-cal").value||null;
+  await Store.addWorkout({
+    date:viewDate,modality:FP_MOD[fpPick.type]||"cardio",title:`${fpPick.type} (Fitness+)`,
+    duration_min:dur,rpe:null,exercises:[],notes:cal?`${cal} kcal burned`:null
+  });
+  $("fp-dur").value="";$("fp-cal").value="";
+  renderMove();renderToday();toast("Fitness+ workout logged ✓");
+}
 
 /* modality switch — exercise builder only makes sense for strength */
 document.querySelectorAll("#w-mod button").forEach(b=>b.onclick=()=>{
