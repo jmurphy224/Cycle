@@ -386,6 +386,7 @@
       <div style="height:14px"></div>
       <label class="fld">Where</label>
       <div class="opts" id="mv-place"></div>
+      <div class="muted" id="mv-equip" style="font-size:12px;margin-top:6px"></div>
       <div style="height:14px"></div>
       <label class="fld">Energy today</label>
       <div class="energy" id="mv-energy"></div>
@@ -924,8 +925,20 @@ async function aiAsk(){
 
 /* ---- MOVE ---- */
 const TIMES=[15,30,45,60];
-const PLACES=["Home","Gym","Hotel","Bodyweight"];
-let planPick={time:30,place:"Home",energy:3};
+const PLACES=["Home","Planet Fitness","Hotel","Bodyweight"];
+const EQUIPMENT={
+  "Home":"Bodyweight plus whatever's typically around a house — assume no machines or barbell unless the exercise is bodyweight-only.",
+  "Planet Fitness":"Selectorized strength machines (chest press, shoulder press, leg press, leg extension, leg curl, lat pulldown, seated row, pec deck / rear delt fly, cable crossover, ab crunch, hip abductor/adductor, assisted dip/pull-up), a Smith machine, dual-adjustable cable/functional trainer stations, dumbbells up to ~75 lbs, the 30-minute hydraulic circuit, and cardio machines. No barbells, no squat rack or power rack, no deadlift platform, no bumper plates.",
+  "Hotel":"Small hotel gym — a few dumbbells (often light, may top out under 50 lbs), maybe one cable or multi-station machine, a bench, a treadmill/bike. Bodyweight is always a fallback.",
+  "Bodyweight":"No equipment at all — bodyweight only."
+};
+const EQUIP_SHORT={
+  "Home":"Bodyweight, no machines",
+  "Planet Fitness":"Selectorized machines, cables, Smith machine, dumbbells to ~75 lbs — no barbells or squat rack",
+  "Hotel":"A few dumbbells, maybe a cable machine",
+  "Bodyweight":"No equipment"
+};
+let planPick={time:30,place:"Planet Fitness",energy:3};
 let woDraft={exercises:[]};
 let lastPlan=null;
 
@@ -934,6 +947,7 @@ function renderMove(){renderMoveOpts();renderEx();renderWorkoutList();renderVolu
 function renderMoveOpts(){
   $("mv-time").innerHTML=TIMES.map(t=>`<div class="opt ${t===planPick.time?"sel":""}" onclick="pickTime(${t})">${t} min</div>`).join("");
   $("mv-place").innerHTML=PLACES.map(p=>`<div class="opt ${p===planPick.place?"sel":""}" onclick="pickPlace('${p}')">${p}</div>`).join("");
+  $("mv-equip").textContent="Assumes: "+(EQUIP_SHORT[planPick.place]||"");
   $("mv-energy").innerHTML=[1,2,3,4,5].map(n=>`<div class="${n===planPick.energy?"sel":""}" onclick="pickEnergy(${n})">${n}</div>`).join("");
 }
 function pickTime(t){planPick.time=t;renderMoveOpts();}
@@ -1061,8 +1075,8 @@ async function aiPlan(){
     const t=todayTotals();
     const shotDates=Store.listShots().map(x=>x.date).sort();
     const sinceShot=shotDates.length?Math.floor((new Date(today())-new Date(shotDates[shotDates.length-1]))/86400000):null;
-    const ctx=`Last 14 days of training:\n${recent}\n\nToday: ${planPick.time} minutes available, location ${planPick.place}, energy ${planPick.energy}/5. Sore or off-limits: ${$("mv-limits").value.trim()||"nothing"}. Eaten so far: ${Math.round(t.cal)} kcal and ${Math.round(t.pro)}g protein against a ${goals.cal} kcal / ${goals.pro}g target.${sinceShot!==null?` ${sinceShot} days since last injection.`:""}`;
-    const sys=`You program training for a GLP-1 (tirzepatide) user in a calorie deficit. Preserving lean mass is the priority, so bias toward resistance training. Balance movement patterns against what was trained recently and never hit the same muscle group two days running. Treat energy as a real constraint: at 1-2 out of 5, return a genuinely easy session, not a shortened hard one. Respect stated sore or off-limits areas absolutely. Fit the time available and the equipment implied by the location. Suggest only — never prescribe volume or intensity tied to calorie intake. Reply with ONLY a JSON object, no prose, no markdown fences: {"title":"short name","modality":"strength|cardio|mobility","duration_min":int,"rationale":"one sentence on why this session today","blocks":[{"name":"exercise","sets":int,"reps":"8-10","note":"optional short cue"}]}. For cardio or mobility use sets:1 and put the duration or hold time in reps.`;
+    const ctx=`Last 14 days of training:\n${recent}\n\nToday: ${planPick.time} minutes available, location ${planPick.place}, energy ${planPick.energy}/5. Equipment available at ${planPick.place}: ${EQUIPMENT[planPick.place]||"unspecified"}. Sore or off-limits: ${$("mv-limits").value.trim()||"nothing"}. Eaten so far: ${Math.round(t.cal)} kcal and ${Math.round(t.pro)}g protein against a ${goals.cal} kcal / ${goals.pro}g target.${sinceShot!==null?` ${sinceShot} days since last injection.`:""}`;
+    const sys=`You program training for a GLP-1 (tirzepatide) user in a calorie deficit. Preserving lean mass is the priority, so default to resistance training every session — reach for cardio or mobility only when energy is very low (1-2/5) or the recent log shows no rest/recovery day this week. Balance movement patterns against what was trained recently and never hit the same muscle group two days running. Treat energy as a real constraint: at 1-2 out of 5, return a genuinely easy session, not a shortened hard one. Respect stated sore or off-limits areas absolutely. Fit the time available. Only prescribe exercises that use the equipment listed as available for today's location — never assume a barbell, squat rack, or other equipment not listed. Name each exercise the way it's labeled on the machine at that location (e.g. "Leg Press Machine", "Smith Machine Squat", "Lat Pulldown Machine", "Cable Row") so it's easy to find on the gym floor. Suggest only — never prescribe volume or intensity tied to calorie intake. Reply with ONLY a JSON object, no prose, no markdown fences: {"title":"short name","modality":"strength|cardio|mobility","duration_min":int,"rationale":"one sentence on why this session today","blocks":[{"name":"exercise","sets":int,"reps":"8-10","note":"optional short cue"}]}. For cardio or mobility use sets:1 and put the duration or hold time in reps.`;
     const raw=await callAI(sys,ctx);
     lastPlan=JSON.parse(raw.replace(/```json|```/g,"").trim());
     s.textContent="";renderPlan(lastPlan);
