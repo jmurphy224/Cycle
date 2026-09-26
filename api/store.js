@@ -11,6 +11,8 @@
 //
 // Zero dependencies — uses fetch against PostgREST directly.
 
+import { requireAuth } from "./_auth.js";
+
 const URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_KEY;
 
@@ -18,10 +20,7 @@ const KEY = process.env.SUPABASE_SERVICE_KEY;
 const TABLES = { food: "food_log", shots: "shots", daily: "daily", workouts: "workouts" };
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (!requireAuth(req, res)) return;
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
   if (!URL || !KEY) return res.status(500).json({ error: "Server not configured (missing env vars)" });
 
