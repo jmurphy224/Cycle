@@ -8,6 +8,8 @@
 // Both are OPTIONAL — Open Food Facts needs no key at all, so barcode
 // lookup works out of the box even without USDA_FDC_API_KEY set.
 
+import { requireAuth } from "./_auth.js";
+
 const USDA_KEY = process.env.USDA_FDC_API_KEY;
 
 const NUTRIENT_IDS = { calories: 1008, protein: 1003, carbs: 1005, fat: 1004, fiber: 1079 };
@@ -100,10 +102,7 @@ export async function lookupBarcode(rawCode, fetchImpl = fetch) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (!requireAuth(req, res)) return;
 
   const code = (req.query?.code || "").toString().trim();
   if (!code) return res.status(400).json({ error: "Missing code" });

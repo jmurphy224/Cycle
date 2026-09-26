@@ -8,13 +8,12 @@
 // This is OPTIONAL. Without it, the exercise video button falls back to a
 // plain "search on YouTube" link instead of an inline player.
 
+import { requireAuth } from "./_auth.js";
+
 const KEY = process.env.YOUTUBE_API_KEY;
 
 export default async function handler(req, res) {
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (!requireAuth(req, res)) return;
   if (!KEY) return res.status(503).json({ error: "YouTube search not configured" });
 
   const q = (req.query?.q || "").toString().trim();
