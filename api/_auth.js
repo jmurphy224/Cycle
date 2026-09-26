@@ -25,6 +25,7 @@ export function requireAuth(req, res) {
   }
   const given = req.headers["x-app-key"];
   if (!given || !timingSafeEqual(digest(given), digest(PASSCODE))) {
+    res.setHeader("x-auth", "passcode");
     res.status(401).json({ error: "Wrong or missing passcode" });
     return false;
   }

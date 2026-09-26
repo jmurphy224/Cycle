@@ -23,6 +23,7 @@
     --safe-b:env(safe-area-inset-bottom,0px);
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  [hidden]{display:none!important}
   body{
     background:var(--bg);color:var(--text);font-family:var(--body);
     font-size:15px;line-height:1.45;padding-bottom:calc(76px + var(--safe-b));
@@ -750,7 +751,8 @@ async function api(path,opts={}){
   const headers={...(opts.headers||{}),"x-app-key":getKey()};
   if(opts.body!=null&&typeof opts.body!=="string"){headers["Content-Type"]="application/json";opts={...opts,body:JSON.stringify(opts.body)};}
   const r=await fetch(path,{...opts,headers});
-  if(r.status===401)showLock();
+  // Only our own passcode check locks the app — not an upstream 401.
+  if(r.status===401&&r.headers.get("x-auth")==="passcode")showLock();
   return r;
 }
 function showLock(msg){
