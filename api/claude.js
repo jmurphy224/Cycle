@@ -4,7 +4,7 @@
 //
 // Env vars to set in Vercel (Project -> Settings -> Environment Variables):
 //   ANTHROPIC_API_KEY  -> your key from console.anthropic.com (starts "sk-ant-")
-//   APP_PASSCODE       -> see api/_auth.js
+//   (plus the Supabase vars in api/_db.js — every route requires a signed-in user)
 //
 // This is OPTIONAL. Cycle works as a full tracker without it (manual entry).
 // Set it up when you want the "describe your meal and it fills in the macros"
@@ -16,7 +16,7 @@
 // matching that shape — no more parsing prose or markdown fences.
 
 import Anthropic from "@anthropic-ai/sdk";
-import { requireAuth } from "./_auth.js";
+import { requireUser } from "./_auth.js";
 
 const MODELS = {
   smart: "claude-sonnet-5",
@@ -28,7 +28,7 @@ const client = process.env.ANTHROPIC_API_KEY ? new Anthropic() : null;
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  if (!requireAuth(req, res)) return;
+  if (!requireUser(req, res)) return;
   if (!client) return res.status(503).json({ error: "AI not configured" });
 
   const { tier = "fast", system, messages, schema, max_tokens = 1500 } = req.body || {};

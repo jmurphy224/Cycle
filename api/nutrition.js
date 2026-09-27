@@ -14,7 +14,7 @@
 //   brand  optional brand name — only then are Branded foods searched
 //   grams  optional AI-estimated weight, used when qty can't be converted
 
-import { requireAuth } from "./_auth.js";
+import { requireUser } from "./_auth.js";
 
 const KEY = process.env.USDA_FDC_API_KEY;
 
@@ -180,7 +180,7 @@ async function search(q, dataType) {
 }
 
 export default async function handler(req, res) {
-  if (!requireAuth(req, res)) return;
+  if (!requireUser(req, res)) return;
   if (!KEY) return res.status(503).json({ error: "USDA nutrition lookup not configured" });
 
   const q = (req.query?.q || "").toString().trim();
