@@ -695,7 +695,13 @@ const Store = (() => {
   const toShot=e=>clean({date:e.date,dose:e.dose,site:e.site,side_effects:e.sideEffects,notes:e.notes});
   const fromShot=r=>({id:r.id,date:r.date,dose:r.dose,site:r.site,sideEffects:r.side_effects||[],notes:r.notes});
   const toWorkout=e=>clean({date:e.date,modality:e.modality,title:e.title,duration_min:e.duration_min,rpe:e.rpe,exercises:e.exercises,notes:e.notes});
-  const fromWorkout=r=>({id:r.id,date:r.date,modality:r.modality,title:r.title,duration_min:r.duration_min,rpe:r.rpe,exercises:r.exercises||[],notes:r.notes});
+  // Older workouts stored {exercise, sets:3, reps:"10-12"}; turn those into
+  // the current {name, sets:[{reps,weight}]} shape so every screen can read them.
+  const normEx=e=>({
+    name:e?.name||e?.exercise||"",
+    sets:Array.isArray(e?.sets)?e.sets:Array.from({length:Math.max(0,Math.min(20,+e?.sets||0))},()=>({reps:e?.reps??"",weight:e?.weight??""}))
+  });
+  const fromWorkout=r=>({id:r.id,date:r.date,modality:r.modality,title:r.title,duration_min:r.duration_min,rpe:r.rpe,exercises:(Array.isArray(r.exercises)?r.exercises:[]).map(normEx),notes:r.notes});
   const toDaily=d=>clean({date:d.date,weight:d.weight,water_oz:d.water_oz});
   const fromDaily=r=>({date:r.date,weight:r.weight??null,water_oz:r.water_oz||0});
 
