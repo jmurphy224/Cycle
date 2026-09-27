@@ -293,6 +293,8 @@
   .lock-card .logo{font-family:var(--disp);font-weight:700;font-size:22px;letter-spacing:-0.03em}
   .lock-card .logo b{color:var(--accent)}
   .nav-logo{display:none}
+  .equip{font-size:12.5px;color:var(--muted);line-height:1.45}
+  .plan .blk .last{display:block;font-size:11.5px;color:var(--fiber);margin-top:2px;font-variant-numeric:tabular-nums}
   .switch{display:flex;align-items:center;gap:10px;font-size:14px;flex-wrap:wrap}
   .switch input{width:20px;height:20px;accent-color:var(--accent);flex:0 0 auto}
 
@@ -516,6 +518,8 @@
         <div class="opts" id="mv-time"></div>
         <label class="fld">Where</label>
         <div class="opts" id="mv-place"></div>
+        <div class="equip" id="mv-equip"></div>
+        <input id="mv-gym" placeholder="Anything different at your gym? e.g. dumbbells stop at 60" onchange="saveGymNotes(this.value)" aria-label="Notes about your gym" />
         <label class="fld">Energy today</label>
         <div class="energy" id="mv-energy"></div>
         <label class="fld">Sore or off-limits</label>
@@ -821,7 +825,7 @@ function signOut(){
 // device before accounts existed, so they aren't lost on first sign-in.
 async function applyUser(user,legacy){
   const st=user.settings||{};
-  profile={username:user.username,showShots:st.showShots!==false};
+  profile={username:user.username,showShots:st.showShots!==false,gymNotes:st.gymNotes||""};
   goals={...DEFAULT_GOALS,...(st.goals||legacy?.goals||{})};
   if(!st.goals&&legacy?.goals)saveSettings({goals});
   Store.setSettings({goals,showShots:profile.showShots});
@@ -1280,8 +1284,21 @@ function discardReview(){draft=[];renderReview();}
 
 /* ---- MOVE ---- */
 const TIMES=[15,30,45,60];
-const PLACES=["Home","Gym","Hotel","Bodyweight"];
-let planPick={time:30,place:"Home",energy:3};
+const PLACES=["Planet Fitness","Home","Hotel","Bodyweight"];
+// What each location has, sent to the AI so it only programs what's there.
+const EQUIPMENT={
+  "Planet Fitness":"Selectorized pin-loaded machines (chest press, incline press, shoulder press, pec fly / rear delt, lat pulldown, seated row, bicep curl, tricep extension/press, assisted pull-up/dip, leg press, leg extension, seated or lying leg curl, calf raise, hip abductor, hip adductor, glute kickback, ab crunch, torso rotation, back extension), a Smith machine, cable crossover / functional trainer stations with attachments, dumbbells up to about 75 lb with adjustable benches, the PF360 area (kettlebells, TRX straps, medicine balls, plyo boxes, battle ropes), the 30-minute express circuit, and cardio machines. No barbells, no free squat rack or power rack, no deadlift platform.",
+  "Home":"Bodyweight plus common household items. Assume no machines, dumbbells, or barbell.",
+  "Hotel":"Small hotel gym: a few light dumbbells (often under 50 lb), maybe one cable or multi-station machine, a bench, a treadmill or bike. Bodyweight is always a fallback.",
+  "Bodyweight":"No equipment at all, bodyweight only."
+};
+const EQUIP_SHORT={
+  "Planet Fitness":"Pin-loaded machines, cables, Smith machine, dumbbells to ~75 lb, PF360 area. No barbells or squat rack.",
+  "Home":"Bodyweight, no machines",
+  "Hotel":"A few light dumbbells, maybe a cable machine",
+  "Bodyweight":"No equipment"
+};
+let planPick={time:45,place:"Planet Fitness",energy:3};
 let woDraft={exercises:[]};
 let lastPlan=null;
 
@@ -1290,6 +1307,9 @@ function renderMove(){renderMoveOpts();renderEx();renderWorkoutList();renderVolu
 function renderMoveOpts(){
   $("mv-time").innerHTML=TIMES.map(t=>`<div class="opt ${t===planPick.time?"sel":""}" onclick="pickTime(${t})">${t} min</div>`).join("");
   $("mv-place").innerHTML=PLACES.map(p=>`<div class="opt ${p===planPick.place?"sel":""}" onclick="pickPlace('${p}')">${p}</div>`).join("");
+  $("mv-equip").textContent="Assumes: "+(EQUIP_SHORT[planPick.place]||"");
+  $("mv-gym").hidden=planPick.place!=="Planet Fitness";
+  if(document.activeElement!==$("mv-gym"))$("mv-gym").value=profile.gymNotes||"";
   $("mv-energy").innerHTML=[1,2,3,4,5].map(n=>`<div class="${n===planPick.energy?"sel":""}" onclick="pickEnergy(${n})">${n}</div>`).join("");
 }
 function pickTime(t){planPick.time=t;renderMoveOpts();}
@@ -1409,8 +1429,34 @@ function renderVolume(){
 
 const PLAN_SCHEMA={type:"object",additionalProperties:false,required:["title","modality","duration_min","rationale","blocks"],properties:{
   title:{type:"string"},modality:{type:"string",enum:["strength","cardio","mobility"]},duration_min:{type:"integer"},rationale:{type:"string"},
-  blocks:{type:"array",items:{type:"object",additionalProperties:false,required:["name","sets","reps","note"],properties:{
-    name:{type:"string"},sets:{type:"integer"},reps:{type:"string"},note:{type:"string"}}}}}};
+  blocks:{type:"array",items:{type:"object",additionalProperties:false,required:["name","sets","reps","weight","note"],properties:{
+    name:{type:"string"},sets:{type:"integer"},reps:{type:"string"},weight:{type:"number"},note:{type:"string"}}}}}};
+// The most recent logged sets for an exercise, matched by name.
+const exKey=n=>String(n||"").trim().toLowerCase().replace(/\s+/g," ");
+function lastSetsFor(name){
+  const k=exKey(name);if(!k)return null;
+  const w=Store.listWorkouts().filter(w=>(w.exercises||[]).some(e=>exKey(e.name)===k&&(e.sets||[]).some(s=>+s.weight||+s.reps)))
+    .sort((a,b)=>a.date<b.date?1:-1)[0];
+  if(!w)return null;
+  const sets=w.exercises.find(e=>exKey(e.name)===k).sets.filter(s=>+s.weight||+s.reps);
+  const top=sets.reduce((a,s)=>(+s.weight||0)>(+a.weight||0)?s:a,sets[0]);
+  return {date:w.date,sets,top};
+}
+const lastText=l=>l?`Last ${fmtDate(l.date).replace(/^\w+, /,"")}: ${l.sets.length} set${l.sets.length>1?"s":""}, best ${+l.top.reps||"?"} × ${+l.top.weight?l.top.weight+" lb":"bodyweight"}`:"";
+// Exercises this person has logged with weights, so the AI reuses the same
+// names and can suggest the next step up.
+function exerciseHistoryText(){
+  const seen=new Set(),lines=[];
+  for(const w of Store.listWorkouts().sort((a,b)=>a.date<b.date?1:-1)){
+    for(const e of w.exercises||[]){
+      const k=exKey(e.name);if(!k||seen.has(k))continue;
+      const l=lastSetsFor(e.name);if(!l)continue;
+      seen.add(k);lines.push(`- ${e.name}: ${l.sets.map(s=>`${+s.reps||"?"}×${+s.weight||0}lb`).join(", ")} (${l.date})`);
+      if(lines.length>=30)break;
+    }
+  }
+  return lines.length?lines.join("\n"):"None logged yet.";
+}
 async function aiPlan(){
   const s=$("mv-status");s.textContent="Thinking…";$("mv-plan").innerHTML="";
   try{
@@ -1421,11 +1467,23 @@ async function aiPlan(){
     const t=todayTotals();
     const shotDates=Store.listShots().map(x=>x.date).sort();
     const sinceShot=shotDates.length?Math.floor((new Date(today())-new Date(shotDates[shotDates.length-1]))/86400000):null;
-    const ctx=`Last 14 days of training:\n${recent}\n\nToday: ${planPick.time} minutes available, location ${planPick.place}, energy ${planPick.energy}/5. Sore or off-limits: ${$("mv-limits").value.trim()||"nothing"}. Eaten so far: ${Math.round(t.cal)} kcal and ${Math.round(t.pro)}g protein against a ${goals.cal} kcal / ${goals.pro}g target.${profile.showShots&&sinceShot!==null?` ${sinceShot} days since last injection.`:""}`;
-    const sys=`You program training for someone${glpNote()} in a calorie deficit. Preserving lean mass is the priority, so bias toward resistance training. Balance movement patterns against what was trained recently and never hit the same muscle group two days running. Treat energy as a real constraint: at 1-2 out of 5, return a genuinely easy session, not a shortened hard one. Respect stated sore or off-limits areas absolutely. Fit the time available and the equipment implied by the location. Suggest only — never prescribe volume or intensity tied to calorie intake. Keep the rationale to one sentence on why this session today; keep each note to a short form cue or "". For cardio or mobility use sets 1 and put the duration or hold time in reps.`;
-    lastPlan=await callAI({tier:"fast",system:sys,content:ctx,schema:PLAN_SCHEMA,max_tokens:1500});
+    const place=planPick.place,gym=place==="Planet Fitness"&&profile.gymNotes?` Notes about this person's gym: ${profile.gymNotes}.`:"";
+    const ctx=`Last 14 days of training:\n${recent}\n\nLast logged sets per exercise (reps×weight):\n${exerciseHistoryText()}\n\nToday: ${planPick.time} minutes available at ${place}, energy ${planPick.energy}/5. Equipment available: ${EQUIPMENT[place]||"unspecified"}${gym} Sore or off-limits: ${$("mv-limits").value.trim()||"nothing"}. Eaten so far: ${Math.round(t.cal)} kcal and ${Math.round(t.pro)}g protein against a ${goals.cal} kcal / ${goals.pro}g target.${profile.showShots&&sinceShot!==null?` ${sinceShot} days since last injection.`:""}`;
+    const sys=`You program gym sessions for someone${glpNote()} in a calorie deficit. Preserving lean mass is the priority, so default to resistance training; choose cardio or mobility only when energy is 1-2/5 or the log shows no easy day this week. Balance movement patterns against recent training and never hit the same muscle group two days running. Treat energy as a real constraint: at 1-2 out of 5, return a genuinely easy session, not a shortened hard one. Respect sore or off-limits areas absolutely. Fit the time available, allowing about 2-3 minutes per set including rest and moving between machines.
+
+Only use the equipment listed for today's location and anything the gym notes add; never assume a barbell or squat rack. Name each exercise the way it's labeled on the gym floor, e.g. "Chest Press Machine", "Lat Pulldown", "Seated Row Machine", "Leg Press", "Smith Machine Squat", "Cable Tricep Pushdown", "Dumbbell Romanian Deadlift". If the person has logged an exercise before, reuse that exact name so their history lines up.
+
+weight: the suggested working weight in lb. If they logged the exercise before, progress from it: +5 lb (machines and cables) or the next dumbbell up if they reached the top of the rep range on their best set last time, otherwise the same weight. If there's no history, give a conservative starting weight, or 0 for bodyweight or cardio.
+note: one short cue, preferably machine setup (seat height, pad position, grip) or a form point.
+rationale: one sentence on why this session today.
+For cardio or mobility use sets 1 and put the duration or hold time in reps.`;
+    lastPlan=await callAI({tier:"smart",system:sys,content:ctx,schema:PLAN_SCHEMA,max_tokens:2500});
     s.textContent="";renderPlan(lastPlan);
   }catch(e){s.textContent=e.message||"Couldn't build a plan — log manually below.";}
+}
+async function saveGymNotes(v){
+  profile.gymNotes=v.trim().slice(0,300);
+  await saveSettings({gymNotes:profile.gymNotes});toast("Gym notes saved");
 }
 const ytSearchUrl=name=>`https://www.youtube.com/results?search_query=${encodeURIComponent(name+" exercise form")}`;
 const videoLink=(name,id)=>name?`<button type="button" class="vidlink" data-vid="${id}" data-name="${esc(name)}" onclick="event.stopPropagation();toggleVideo(this)" title="Watch ${esc(name)}"><svg viewBox="0 0 24 24"><path d="M6 4l14 8-14 8z"/></svg></button>`:"";
@@ -1452,8 +1510,8 @@ function renderPlan(p){
     <div class="why">${esc(p.rationale||"")}${p.duration_min?` · ~${p.duration_min} min`:""}</div>
     ${(p.blocks||[]).map((b,i)=>`<div class="blk">
       <div class="blkrow">
-        <span class="bn">${esc(b.name||"")}${b.note?`<span class="note">${esc(b.note)}</span>`:""}</span>
-        <span class="bs">${esc(String(b.sets||1))} × ${esc(String(b.reps||""))}${videoLink(b.name,"pv-"+i)}</span>
+        <span class="bn">${esc(b.name||"")}${b.note?`<span class="note">${esc(b.note)}</span>`:""}${lastSetsFor(b.name)?`<span class="last">${esc(lastText(lastSetsFor(b.name)))}</span>`:""}</span>
+        <span class="bs">${esc(String(b.sets||1))} × ${esc(String(b.reps||""))}${+b.weight?` @ ${+b.weight} lb`:""}${videoLink(b.name,"pv-"+i)}</span>
       </div>
       <div class="vidbox" id="pv-${i}"></div>
     </div>`).join("")}
@@ -1468,13 +1526,15 @@ function usePlan(){
   $("w-exwrap").style.display=mod==="strength"?"":"none";
   $("w-title").value=p.title||"";
   $("w-dur").value=p.duration_min||"";
-  woDraft.exercises=(p.blocks||[]).map(b=>({
-    name:b.name||"",
-    sets:Array.from({length:Math.max(1,Math.min(8,+b.sets||1))},()=>({reps:"",weight:""}))
-  }));
+  // Pre-fill each set with the suggested weight and the low end of the rep
+  // range, so at the gym you only change what differs.
+  woDraft.exercises=(p.blocks||[]).map(b=>{
+    const reps=(String(b.reps||"").match(/\d+/)||[""])[0];
+    return {name:b.name||"",sets:Array.from({length:Math.max(1,Math.min(8,+b.sets||1))},()=>({reps,weight:+b.weight?String(+b.weight):""}))};
+  });
   renderEx();
   $("w-title").scrollIntoView({behavior:"smooth",block:"center"});
-  toast("Loaded — fill in your numbers");
+  toast("Loaded — adjust the numbers as you go");
 }
 
 /* ---- SHOT ---- */

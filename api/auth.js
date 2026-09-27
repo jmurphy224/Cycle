@@ -14,7 +14,7 @@ import { db, dbConfigured } from "./_db.js";
 const MAX_TRIES = 10;
 const LOCK_MINUTES = 15;
 // Only these settings keys may be saved from the browser.
-const SETTINGS_KEYS = ["goals", "showShots"];
+const SETTINGS_KEYS = ["goals", "showShots", "gymNotes"];
 
 // Compared against when the username doesn't exist, so a wrong username takes
 // as long as a wrong password and doesn't reveal which usernames are real.
@@ -78,6 +78,7 @@ export default async function handler(req, res) {
     if (action === "settings") {
       const patch = {};
       for (const k of SETTINGS_KEYS) if (req.body.settings?.[k] !== undefined) patch[k] = req.body.settings[k];
+      if (patch.gymNotes !== undefined) patch.gymNotes = String(patch.gymNotes).slice(0, 300);
       const settings = { ...(user.settings || {}), ...patch };
       const r = await db(byId(me.id), { method: "PATCH", body: { settings }, prefer: "return=representation" });
       if (!r.ok) return res.status(502).json({ error: "Couldn't save settings." });
