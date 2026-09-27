@@ -737,7 +737,8 @@ const Store = (() => {
     if(String(id).startsWith("tmp_"))return;
     const op={action:"delete",table:"workouts",id};try{await call(op)}catch{enqueue(op)}
   }
-  const listWorkouts=d=>{const a=read(LS.workouts,[]);return d?a.filter(w=>w.date===d):a};
+  // fromWorkout also upgrades copies cached on this device in the old format.
+  const listWorkouts=d=>{const a=read(LS.workouts,[]).map(fromWorkout);return d?a.filter(w=>w.date===d):a};
 
   const getDay=d=>read(LS.daily,{})[d]||{date:d,water_oz:0,weight:null};
   const listDaily=()=>Object.values(read(LS.daily,{})).sort((a,b)=>a.date<b.date?-1:1);
@@ -1630,7 +1631,10 @@ async function boot(){
   const s=Store.getSettings();if(s.goals)goals={...DEFAULT_GOALS,...s.goals};
   if(s.showShots===false)profile.showShots=false;
   $("acct-name").textContent=profile.username;
-  loadGoalsUI();applyShotsVisibility();setMeal(mealForNow());renderToday();renderMove();
+  // Draw from this device's cached copy first; a drawing bug must never stop
+  // the sync below from running.
+  try{loadGoalsUI();applyShotsVisibility();setMeal(mealForNow());renderToday();renderMove();}
+  catch(e){console.error("render from cache failed:",e);}
   if(!lsGet(SESSION_LS)){showLogin();return;}
   // Pick up settings changed on another device.
   api("/api/auth",{method:"POST",body:{action:"me"}}).then(r=>r.ok?r.json():null).then(d=>{if(d?.user)applyUser(d.user);}).catch(()=>{});
@@ -1638,10 +1642,13 @@ async function boot(){
     await Store.sync();
     $("status-text").innerHTML="Connected to Supabase. Everything you log syncs and is backed up.";
     $("synced").textContent="Synced "+new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
-    renderToday();renderFood();renderMove();
   }catch(e){
     $("status-text").innerHTML="Not syncing yet. The exact error is below — this tells us the fix:<br><br><code style='color:var(--danger);font-size:12px;word-break:break-all'>"+esc(e.message||String(e))+"</code>";
     $("synced").textContent="Working offline";
+  }
+  try{renderToday();renderFood();renderMove();}
+  catch(e){
+    $("status-text").innerHTML="Synced, but a screen failed to draw. Send this to Claude:<br><br><code style='color:var(--danger);font-size:12px;word-break:break-all'>"+esc(e.message||String(e))+"</code>";
   }
 }
 boot();
