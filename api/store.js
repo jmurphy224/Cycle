@@ -3,85 +3,66 @@
 // service_role key server-side so it NEVER reaches the browser.
 //
 // The front-end talks only to /api/store. This function forwards a small set
-// of allow-listed, structured operations to Supabase's REST API.
+// of allow-listed, structured operations to Supabase's REST API, and scopes
+// every one of them to the signed-in person: reads only return their rows,
+// writes are stamped with their user_id, and updates/deletes can only touch
+// rows they own.
 //
-// Env vars to set in Vercel (Project -> Settings -> Environment Variables):
-//   SUPABASE_URL          -> https://YOURPROJECT.supabase.co
-//   SUPABASE_SERVICE_KEY  -> the service_role key (Settings -> API in Supabase)
-//
-// Zero dependencies — uses fetch against PostgREST directly.
+// Env vars: see api/_db.js.
 
-import { requireAuth } from "./_auth.js";
-
-const URL = process.env.SUPABASE_URL;
-const KEY = process.env.SUPABASE_SERVICE_KEY;
+import { requireUser } from "./_auth.js";
+import { db, dbConfigured } from "./_db.js";
 
 // logical name -> real Postgres table. Only these may be touched.
 const TABLES = { food: "food_log", shots: "shots", daily: "daily", workouts: "workouts" };
 
+const enc = encodeURIComponent;
+// The browser never gets to choose whose rows it touches.
+const withoutOwner = (o) => {
+  const { user_id, ...rest } = o || {};
+  return rest;
+};
+
 export default async function handler(req, res) {
-  if (!requireAuth(req, res)) return;
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
-  if (!URL || !KEY) return res.status(500).json({ error: "Server not configured (missing env vars)" });
+  const me = requireUser(req, res);
+  if (!me) return;
+  if (!dbConfigured) return res.status(500).json({ error: "Server not configured (missing env vars)" });
 
   const { action, table, eq, order, rows, id, values, onConflict } = req.body || {};
   const t = TABLES[table];
   if (!t) return res.status(400).json({ error: `Unknown table: ${table}` });
 
-  const rest = `${URL}/rest/v1/${t}`;
-  const H = {
-    apikey: KEY,
-    Authorization: `Bearer ${KEY}`,
-    "Content-Type": "application/json",
-  };
-
-  // Build a PostgREST filter string from a structured {col: val} map.
-  const eqFilters = (obj) =>
-    Object.entries(obj || {}).map(([c, v]) => `${encodeURIComponent(c)}=eq.${encodeURIComponent(v)}`);
+  const mine = `user_id=eq.${enc(me.id)}`;
+  const stamp = (list) => (Array.isArray(list) ? list : [list]).map((r) => ({ ...withoutOwner(r), user_id: me.id }));
+  // Upstream auth failures are a server config problem, not a sign-in one —
+  // don't pass a 401 through, or the app would bounce to the sign-in screen.
+  const send = (r) => res.status(r.status === 401 || r.status === 403 ? 502 : r.status).json(r.data);
 
   try {
     if (action === "list") {
-      const qs = ["select=*", ...eqFilters(eq)];
-      if (order?.col) qs.push(`order=${encodeURIComponent(order.col)}.${order.asc ? "asc" : "desc"}`);
-      const r = await fetch(`${rest}?${qs.join("&")}`, { headers: H });
-      return res.status(r.status).json(await r.json());
+      const qs = ["select=*", mine, ...Object.entries(withoutOwner(eq)).map(([c, v]) => `${enc(c)}=eq.${enc(v)}`)];
+      if (order?.col) qs.push(`order=${enc(order.col)}.${order.asc ? "asc" : "desc"}`);
+      return send(await db(`${t}?${qs.join("&")}`));
     }
 
     if (action === "insert") {
-      const r = await fetch(rest, {
-        method: "POST",
-        headers: { ...H, Prefer: "return=representation" },
-        body: JSON.stringify(rows),
-      });
-      return res.status(r.status).json(await r.json());
+      return send(await db(t, { method: "POST", body: stamp(rows), prefer: "return=representation" }));
     }
 
     if (action === "update") {
-      const r = await fetch(`${rest}?id=eq.${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        headers: { ...H, Prefer: "return=representation" },
-        body: JSON.stringify(values),
-      });
-      return res.status(r.status).json(await r.json());
+      return send(await db(`${t}?id=eq.${enc(id)}&${mine}`, { method: "PATCH", body: withoutOwner(values), prefer: "return=representation" }));
     }
 
-    // Upsert on a unique column (Daily uses date). onConflict = "date".
+    // Upsert on a unique key. Daily rows are unique per person per date.
     if (action === "upsert") {
-      const conflict = onConflict ? `?on_conflict=${encodeURIComponent(onConflict)}` : "";
-      const r = await fetch(`${rest}${conflict}`, {
-        method: "POST",
-        headers: { ...H, Prefer: "resolution=merge-duplicates,return=representation" },
-        body: JSON.stringify(rows),
-      });
-      return res.status(r.status).json(await r.json());
+      const conflict = onConflict === "date" ? "user_id,date" : onConflict;
+      const qs = conflict ? `?on_conflict=${enc(conflict)}` : "";
+      return send(await db(`${t}${qs}`, { method: "POST", body: stamp(rows), prefer: "resolution=merge-duplicates,return=representation" }));
     }
 
     if (action === "delete") {
-      const r = await fetch(`${rest}?id=eq.${encodeURIComponent(id)}`, {
-        method: "DELETE",
-        headers: { ...H, Prefer: "return=representation" },
-      });
-      return res.status(r.status).json(await r.json());
+      return send(await db(`${t}?id=eq.${enc(id)}&${mine}`, { method: "DELETE", prefer: "return=representation" }));
     }
 
     return res.status(400).json({ error: `Unknown action: ${action}` });
