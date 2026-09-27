@@ -191,6 +191,9 @@
   .ex-head{display:flex;gap:8px;align-items:center;margin-bottom:6px}
   .ex-head input{flex:1;background:transparent;border:none;border-bottom:1px solid var(--line);border-radius:0;padding:6px 2px;font-weight:500}
   .ex-head .rm{color:var(--faint);font-size:20px;padding:2px 6px;line-height:1}
+  .ex-head select{flex:1;min-width:0;padding:9px 10px;font-weight:500}
+  .ex-head .tolist{font-size:12px;color:var(--muted);white-space:nowrap;padding:4px 6px}
+  .ex .last{font-size:11.5px;color:var(--fiber);margin:0 2px 6px;font-variant-numeric:tabular-nums}
   .setcap,.setrow{display:grid;grid-template-columns:24px 1fr 1fr 24px;gap:7px;align-items:center}
   .setcap{margin-top:6px}
   .setcap span{font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;text-align:center}
@@ -1298,6 +1301,21 @@ const EQUIP_SHORT={
   "Hotel":"A few light dumbbells, maybe a cable machine",
   "Bodyweight":"No equipment"
 };
+// Planet Fitness doesn't publish an official per-machine list, and clubs vary,
+// so this is the standard PF floor (Matrix / Life Fitness selectorized line,
+// Smith machine, cables, dumbbells, PF360). It feeds the Log a session picker
+// and the AI is told to name exercises from it so history lines up.
+const PF_EXERCISES={
+  "Chest":["Chest Press Machine","Incline Chest Press Machine","Pec Fly Machine","Smith Machine Bench Press","Smith Machine Incline Press","Dumbbell Bench Press","Dumbbell Incline Press","Dumbbell Fly","Cable Crossover","Assisted Dip Machine"],
+  "Back":["Lat Pulldown","Seated Row Machine","Assisted Pull-Up Machine","Rear Delt Machine","Back Extension Machine","Seated Cable Row","Straight-Arm Cable Pulldown","Cable Face Pull","Single-Arm Dumbbell Row","TRX Row"],
+  "Shoulders":["Shoulder Press Machine","Smith Machine Shoulder Press","Dumbbell Shoulder Press","Dumbbell Lateral Raise","Cable Lateral Raise","Dumbbell Front Raise","Dumbbell Shrug"],
+  "Arms":["Bicep Curl Machine","Tricep Extension Machine","Tricep Press Machine","Dumbbell Bicep Curl","Dumbbell Hammer Curl","Cable Bicep Curl","Cable Tricep Pushdown","Overhead Cable Tricep Extension","Dumbbell Overhead Tricep Extension"],
+  "Legs & glutes":["Leg Press","Leg Extension","Seated Leg Curl","Lying Leg Curl","Calf Raise Machine","Hip Abductor","Hip Adductor","Glute Kickback Machine","Smith Machine Squat","Smith Machine Split Squat","Smith Machine Hip Thrust","Dumbbell Romanian Deadlift","Dumbbell Goblet Squat","Dumbbell Walking Lunge","Box Step-Up","Kettlebell Swing","Cable Pull-Through"],
+  "Core":["Ab Crunch Machine","Torso Rotation Machine","Cable Woodchop","Hanging Knee Raise","Plank","Medicine Ball Slam","Dead Bug"],
+  "Bodyweight":["Push-Up","Bodyweight Squat","Glute Bridge","Reverse Lunge","Wall Sit","Bird Dog"],
+  "Cardio":["Treadmill","Elliptical","Upright Bike","Recumbent Bike","Stair Climber","Arc Trainer","Rowing Machine","Battle Ropes","30-Minute Express Circuit"]
+};
+const PF_ALL=Object.values(PF_EXERCISES).flat();
 let planPick={time:45,place:"Planet Fitness",energy:3};
 let woDraft={exercises:[]};
 let lastPlan=null;
@@ -1328,6 +1346,36 @@ function selectedMod(){return document.querySelector("#w-mod button.on")?.datase
 function addEx(name){woDraft.exercises.push({name:name||"",sets:[{reps:"",weight:""}]});renderEx();}
 function delEx(i){woDraft.exercises.splice(i,1);renderEx();}
 function setExName(i,v){woDraft.exercises[i].name=v;}
+// Names this person has logged that aren't on the PF list, newest first.
+function myExerciseNames(){
+  const pf=new Set(PF_ALL.map(exKey)),seen=new Set(),out=[];
+  for(const w of Store.listWorkouts().sort((a,b)=>a.date<b.date?1:-1))
+    for(const e of w.exercises||[]){
+      const k=exKey(e.name);if(!k||pf.has(k)||seen.has(k))continue;
+      seen.add(k);out.push(e.name.trim());
+    }
+  return out;
+}
+function exSelect(i,name){
+  const opt=n=>`<option${n===name?" selected":""}>${esc(n)}</option>`,mine=myExerciseNames();
+  return `<select onchange="pickExName(${i},this.value)" aria-label="Exercise">
+    <option value="">Choose exercise…</option>
+    ${mine.length?`<optgroup label="Your exercises">${mine.map(opt).join("")}</optgroup>`:""}
+    ${Object.entries(PF_EXERCISES).map(([g,list])=>`<optgroup label="${g}">${list.map(opt).join("")}</optgroup>`).join("")}
+    <option value="__other">Other (type it)…</option>
+  </select>`;
+}
+// Picking from the list re-renders (the video link and "last time" line
+// depend on the name); a fresh first set is pre-filled from last time.
+function pickExName(i,v){
+  const ex=woDraft.exercises[i];
+  if(v==="__other"){ex.name="";ex.custom=true;renderEx();document.querySelector(`#w-ex .ex:nth-child(${i+1}) .ex-head input`)?.focus();return;}
+  ex.name=v;ex.custom=false;
+  const l=lastSetsFor(v),s=ex.sets;
+  if(l&&s.length===1&&s[0].reps===""&&s[0].weight==="")s[0]={reps:String(+l.top.reps||""),weight:+l.top.weight?String(+l.top.weight):""};
+  renderEx();
+}
+function exToList(i){woDraft.exercises[i].custom=false;woDraft.exercises[i].name="";renderEx();}
 function setCell(i,j,k,v){woDraft.exercises[i].sets[j][k]=v;}
 function addSet(i){
   const s=woDraft.exercises[i].sets,prev=s[s.length-1]||{reps:"",weight:""};
@@ -1342,13 +1390,18 @@ function delSet(i,j){
 function renderEx(){
   const el=$("w-ex");if(!el)return;
   if(!woDraft.exercises.length){el.innerHTML=`<div class="empty" style="padding:16px 10px">Nothing added yet</div>`;return;}
-  el.innerHTML=woDraft.exercises.map((ex,i)=>`
+  const known=new Set([...PF_ALL,...myExerciseNames()]);
+  el.innerHTML=woDraft.exercises.map((ex,i)=>{
+    const typed=ex.custom||(ex.name&&!known.has(ex.name)),l=lastSetsFor(ex.name);
+    return `
     <div class="ex">
       <div class="ex-head">
-        <input value="${esc(ex.name)}" placeholder="Exercise" oninput="setExName(${i},this.value)" />
+        ${typed?`<input value="${esc(ex.name)}" placeholder="Exercise" oninput="setExName(${i},this.value)" />
+        <button type="button" class="tolist" onclick="exToList(${i})">List</button>`:exSelect(i,ex.name)}
         ${videoLink(ex.name,"ev-"+i)}
         <button class="rm" onclick="delEx(${i})">×</button>
       </div>
+      ${l?`<div class="last">${esc(lastText(l))}</div>`:""}
       <div class="vidbox" id="ev-${i}"></div>
       <div class="setcap"><span></span><span>reps</span><span>lbs</span><span></span></div>
       ${ex.sets.map((s,j)=>`
@@ -1360,7 +1413,7 @@ function renderEx(){
         </div>`).join("")}
       <div style="height:10px"></div>
       <button class="addbtn" onclick="addSet(${i})">+ Set</button>
-    </div>`).join("");
+    </div>`;}).join("");
 }
 
 const volumeOf=w=>(w.exercises||[]).reduce((a,e)=>a+(e.sets||[]).reduce((b,s)=>b+(+s.reps||0)*(+s.weight||0),0),0);
@@ -1471,7 +1524,7 @@ async function aiPlan(){
     const ctx=`Last 14 days of training:\n${recent}\n\nLast logged sets per exercise (reps×weight):\n${exerciseHistoryText()}\n\nToday: ${planPick.time} minutes available at ${place}, energy ${planPick.energy}/5. Equipment available: ${EQUIPMENT[place]||"unspecified"}${gym} Sore or off-limits: ${$("mv-limits").value.trim()||"nothing"}. Eaten so far: ${Math.round(t.cal)} kcal and ${Math.round(t.pro)}g protein against a ${goals.cal} kcal / ${goals.pro}g target.${profile.showShots&&sinceShot!==null?` ${sinceShot} days since last injection.`:""}`;
     const sys=`You program gym sessions for someone${glpNote()} in a calorie deficit. Preserving lean mass is the priority, so default to resistance training; choose cardio or mobility only when energy is 1-2/5 or the log shows no easy day this week. Balance movement patterns against recent training and never hit the same muscle group two days running. Treat energy as a real constraint: at 1-2 out of 5, return a genuinely easy session, not a shortened hard one. Respect sore or off-limits areas absolutely. Fit the time available, allowing about 2-3 minutes per set including rest and moving between machines.
 
-Only use the equipment listed for today's location and anything the gym notes add; never assume a barbell or squat rack. Name each exercise the way it's labeled on the gym floor, e.g. "Chest Press Machine", "Lat Pulldown", "Seated Row Machine", "Leg Press", "Smith Machine Squat", "Cable Tricep Pushdown", "Dumbbell Romanian Deadlift". If the person has logged an exercise before, reuse that exact name so their history lines up.
+Only use the equipment listed for today's location and anything the gym notes add; never assume a barbell or squat rack. ${place==="Planet Fitness"?`Name every exercise exactly as it appears in this Planet Fitness list, which is what the person picks from when logging: ${PF_ALL.join("; ")}. Only go off the list for something the gym notes add.`:`Name each exercise plainly, e.g. "Dumbbell Bench Press", "Push-Up", "Glute Bridge".`} If the person has logged an exercise before, reuse that exact name so their history lines up.
 
 weight: the suggested working weight in lb. If they logged the exercise before, progress from it: +5 lb (machines and cables) or the next dumbbell up if they reached the top of the rep range on their best set last time, otherwise the same weight. If there's no history, give a conservative starting weight, or 0 for bodyweight or cardio.
 note: one short cue, preferably machine setup (seat height, pad position, grip) or a form point.
